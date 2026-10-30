@@ -23,6 +23,9 @@ public:
   void turnOff() override;
   void setDayMode(bool day) override;
   void getTouchData() override;  // CST3530 is polled in LVGL read callback.
+  void wake() override;
+  void pokeTouchController() override; // LVGL owns CST3530 polling
+  void ensureTouchReady() override;   // CST3530 stays initialized on this board
 
 private:
   void updateBrightness();
