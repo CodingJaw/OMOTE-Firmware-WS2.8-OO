@@ -7,7 +7,6 @@
 #include "RapidJsonUtilty.hpp"
 #include "device_settings.hpp"
 #include "device_settings_schema.hpp"
-#include "display.hpp"
 #include "editor_sync_mode.hpp"
 #include "ir/IRTransceiver.hpp"
 #include "LvglResourceManager.hpp"
@@ -55,7 +54,13 @@ void pumpUiDuringHttp() {
 }
 
 IRTransceiver *irHw() {
+#if defined(OMOTE_WAVESHARE28V2)
+  // The Waveshare port uses a disabled IRInterface placeholder, not an
+  // IRTransceiver. Never downcast it to the original concrete hardware.
+  return nullptr;
+#else
   return static_cast<IRTransceiver *>(HardwareFactory::getAbstract().ir().get());
+#endif
 }
 
 /** Copy into the document pool — never pass .c_str() from a temporary std::string or Arduino String. */
@@ -483,7 +488,7 @@ void handleDeviceSettingsPost() {
 
 void prepareForRestart() {
   device_settings::notifyActivity();
-  if (auto disp = std::static_pointer_cast<Display>(HardwareFactory::getAbstract().display()))
+  if (auto disp = HardwareFactory::getAbstract().display())
     disp->wake();
   rebootAtMs = millis() + 500;
 }
@@ -662,7 +667,7 @@ void sync() {
     server.handleClient();
 
   if (isRemoteSessionActive()) {
-    if (auto disp = std::static_pointer_cast<Display>(HardwareFactory::getAbstract().display())) {
+    if (auto disp = HardwareFactory::getAbstract().display()) {
       disp->getTouchData();
       disp->pokeTouchController();
     }
