@@ -31,6 +31,8 @@ public:
   // Call lv_init() before begin().
   bool begin();
   void tick(); // Call regularly from the Arduino loop.
+  lv_display_t *lvglDisplay() const { return display_; }
+  void setBacklight(uint8_t duty);
   bool touchDetected() const { return touchDetected_; }
   bool pressed() const { return pressed_; }
   uint16_t touchX() const { return touchX_; }
