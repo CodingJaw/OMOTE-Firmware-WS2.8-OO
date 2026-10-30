@@ -42,6 +42,8 @@ public:
   void init() override;
   void loopHandler() override;
   void debugPrint(const char *fmt, ...) override;
+  // Returns true only if LittleFS mounts and the scene manifest exists.
+  bool sceneFilesystemReady() const { return sceneFilesystemReady_; }
 
   std::unique_ptr<LoggingInterface> logger() override;
   std::shared_ptr<BatteryInterface> battery() override { return battery_; }
@@ -75,6 +77,7 @@ public:
   unsigned long getWakeTime() override { return startMs_; }
 
 private:
+  bool sceneFilesystemReady_ = false;
   unsigned long startMs_ = 0;
   uint32_t lastNetworkPoll_ = 0;
   uint32_t sleepTimeout_ = 20000;
