@@ -10,7 +10,7 @@
 #include "LvglResourceManager.hpp"
 #include "SettingsPage.hpp"
 #include "editor_sync_mode.hpp"
-#ifndef IS_SIMULATOR
+#if !defined(IS_SIMULATOR) && !defined(OMOTE_WAVESHARE28V2)
 #include "display.hpp"
 #include "device_settings.hpp"
 #endif
@@ -413,8 +413,10 @@ void JsonHomeScreen::reloadCurrentSceneFromDisk() {
 #endif
 #ifndef IS_SIMULATOR
   device_settings::notifyActivity();
+#if !defined(OMOTE_WAVESHARE28V2)
   if (auto disp = std::static_pointer_cast<Display>(HardwareFactory::getAbstract().display()))
     disp->wake();
+#endif
 #endif
 }
 
