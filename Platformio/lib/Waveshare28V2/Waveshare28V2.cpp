@@ -119,6 +119,10 @@ bool Board::begin() {
   return true;
 }
 
+void Board::setBacklight(uint8_t duty) {
+  ledcWrite(kBacklight, duty);
+}
+
 void Board::tick() {
   const uint32_t now = millis();
   lv_tick_inc(now - lastTick_);
