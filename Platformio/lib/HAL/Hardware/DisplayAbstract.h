@@ -21,6 +21,13 @@ public:
   virtual void setDayMode(bool isDay) = 0;
   virtual void getTouchData() = 0;
 
+  // Optional hardware-specific lifecycle hooks. The original OMOTE Display
+  // already implements these methods; Waveshare provides its own equivalents.
+  // Other display backends can safely leave them as no-ops.
+  virtual void wake() {}
+  virtual void pokeTouchController() {}
+  virtual void ensureTouchReady() {}
+
   void ForceRefresh();
 
 protected:
