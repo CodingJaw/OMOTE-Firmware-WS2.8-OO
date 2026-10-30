@@ -87,6 +87,19 @@ void WaveshareDisplay::getTouchData() {
   // Polling is owned by Waveshare28V2::Board's LVGL pointer callback.
 }
 
+void WaveshareDisplay::wake() {
+  // Restore brightness without resetting the CST3530 or destroying UI state.
+  updateBrightness();
+}
+
+void WaveshareDisplay::pokeTouchController() {
+  // No work needed: the LVGL pointer callback polls CST3530 on Wire1.
+}
+
+void WaveshareDisplay::ensureTouchReady() {
+  // The Waveshare CST3530 driver remains initialized while awake.
+}
+
 void WaveshareHardware::init() {
   startMs_ = millis();
   Serial.begin(115200);
