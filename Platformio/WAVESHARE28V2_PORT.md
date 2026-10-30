@@ -77,6 +77,47 @@ Fix build errors before uploading. The full UI has additional dependencies
 relative to Stage 1; use the same mixed Arduino + ESP-IDF framework as OMOTE
 Rev5 rather than forcing the isolated Arduino-only diagnostic environment.
 
+
+### Arduino SPI framework-cache mismatch (October 2026)
+
+The mixed Arduino/ESP-IDF environment uses **Tasmota platform
+2025.03.30**, which expects the Tasmota Arduino core **3.1.3.250302**.
+The environment now pins that release's framework package explicitly.
+
+If you see `SPI.cpp: spiFrequencyToClockDiv(_freq)` failing because
+`esp32-hal-spi.h` expects `spiFrequencyToClockDiv(spi_t*, uint32_t)`,
+you have a cross-version package/cache mismatch: the older SPI sources
+and a newer core header have been mixed. Editing the toolchain's SPI.cpp
+is not a durable fix.
+
+From the repository root, pull the latest branch. From `Platformio/`,
+first rebuild the target using the pinned package:
+
+```bash
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote
+```
+
+The setup script now checks for the incompatible header **before**
+spending time on compilation. If it still reports a mismatched global
+framework package, do not alter your shared PlatformIO packages used
+by your other ESP32 projects. Instead, build with an isolated PlatformIO
+core directory, which installs a separate set of frameworks:
+
+```bash
+PLATFORMIO_CORE_DIR="$HOME/.platformio-omote" \
+  ~/.platformio/penv/bin/platformio run -e waveshare28v2_omote
+```
+
+This isolation downloads tools/frameworks again, but avoids changing
+the global packages used by your proven Waveshare showcase.
+
+The board has **16 MB flash**. A previous build's ESP-IDF cache may
+retain an incorrect 4 MB sdkconfig despite the board settings. This
+target now uses `sdkconfig.defaults.waveshare28v2` and explicitly
+specifies 16 MB. If the 4 MB warning persists, remove **only**
+`Platformio/.pio/build/waveshare28v2_omote` and rebuild; do not
+erase user data on the ESP32 merely to clear a compile-time cache.
+
 ### Filesystem (mandatory for JSON scenes)
 
 Stage 2 uses OMOTE's 16 MB `Rev5Partitions.csv` and expects scene/page/device
