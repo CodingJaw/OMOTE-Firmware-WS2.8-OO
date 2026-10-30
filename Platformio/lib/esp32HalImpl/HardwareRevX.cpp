@@ -1,4 +1,4 @@
-#if !defined(IS_SIMULATOR)
+#if !defined(IS_SIMULATOR) && !defined(OMOTE_WAVESHARE28V2)
 #include "HardwareRevX.hpp"
 #include "Esp32Logger.hpp"
 #include "Hardware/KeyPressAbstract.hpp"
@@ -639,5 +639,4 @@ bool HardwareRevX::lightSensorScan(uint16_t &visPlusIrLevel, uint16_t &irLevel) 
   } else
     return false;
 };
-#endif // !IS_SIMULATOR
-
+#endif // !IS_SIMULATOR && !OMOTE_WAVESHARE28V2
