@@ -1,0 +1,10 @@
+{
+  "name": "Waveshare28V2",
+  "version": "0.1.0",
+  "description": "ST7789 SPI display and CST3530 I2C touch driver for Waveshare ESP32-S3-Touch-LCD-2.8 V2",
+  "build": {
+    "includeDir": "."
+  },
+  "frameworks": "arduino",
+  "platforms": "espressif32"
+}
