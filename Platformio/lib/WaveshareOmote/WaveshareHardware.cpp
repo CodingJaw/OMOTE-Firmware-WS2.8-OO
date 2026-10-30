@@ -109,20 +109,27 @@ void WaveshareHardware::init() {
   if (ESP.getPsramSize() == 0) {
     Serial.println("[waveshare28v2] WARNING: external PSRAM not initialized; check sdkconfig SPIRAM settings");
   }
-
-  // Do not silently erase flash if LittleFS was not uploaded.
-  if (!LittleFS.begin(false)) {
-    Serial.println("[waveshare28v2] LittleFS not mounted; run uploadfs for JsonUI scenes");
+  Serial.println("[waveshare28v2] init: checking LittleFS");
+  // Never automatically format flash. The previous diagnostic image uses
+  // different partitions, so its contents cannot be treated as OMOTE data.
+  // Proceed to a recovery UI when the partition is absent or not provisioned.
+  const bool mounted = LittleFS.begin(false);
+  sceneFilesystemReady_ = mounted && LittleFS.exists("/Scenes.json");
+  if (!mounted) {
+    Serial.println("[waveshare28v2] LittleFS mount FAILED (no format attempted)");
+  } else if (!sceneFilesystemReady_) {
+    Serial.println("[waveshare28v2] LittleFS mounted but Scenes.json missing");
   } else {
-    Serial.printf("[waveshare28v2] LittleFS mounted; Scenes.json: %s\n",
-                  LittleFS.exists("/Scenes.json") ? "found" : "missing (run uploadfs)");
+    Serial.println("[waveshare28v2] LittleFS mounted; Scenes.json found");
   }
 
+  Serial.println("[waveshare28v2] init: starting ST7789 + CST3530");
   display_ = std::make_shared<WaveshareDisplay>();
   keys_ = std::make_shared<Keys>();
   battery_ = std::make_shared<NoBattery>();
   ir_ = std::make_shared<NoIR>();
   stats_ = std::make_shared<EspStats>();
+  Serial.println("[waveshare28v2] init: configuring network services");
   auto handler = wifiHandler::getInstance();
   wifi_ = handler;
   handler->mqttRestoreCredentials();
