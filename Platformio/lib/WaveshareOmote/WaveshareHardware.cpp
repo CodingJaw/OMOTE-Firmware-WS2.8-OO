@@ -91,6 +91,11 @@ void WaveshareHardware::init() {
   startMs_ = millis();
   Serial.begin(115200);
   Serial.println("[waveshare28v2] Starting real OMOTE JsonUI");
+  Serial.printf("[waveshare28v2] Flash size: %u bytes, PSRAM total: %u bytes, PSRAM free: %u bytes\n",
+                ESP.getFlashChipSize(), ESP.getPsramSize(), ESP.getFreePsram());
+  if (ESP.getPsramSize() == 0) {
+    Serial.println("[waveshare28v2] WARNING: external PSRAM not initialized; check sdkconfig SPIRAM settings");
+  }
 
   // Do not silently erase flash if LittleFS was not uploaded.
   if (!LittleFS.begin(false)) {
