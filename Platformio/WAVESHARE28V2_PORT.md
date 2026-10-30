@@ -219,3 +219,46 @@ include directory explicitly; the Waveshare OMOTE target now adds
 `-I components/espressif__mdns/include` alongside the WebSocket
 component include directory. This avoids modifying third-party framework
 headers and is limited to the experimental target.
+
+
+### Stage 2: LittleFS recovery and boot diagnostics
+
+When flashing Stage 2 after the standalone diagnostic target, an existing
+`spiffs` data partition may be uninitialized or contain an incompatible
+filesystem. ESP-IDF then reports errors such as
+`Corrupted dir pair at {0x0, 0x1}` or `mount failed (-84)`.
+**Do not infer the reset cause from this message alone.** Examine the
+reset reason and any exception/backtrace from a complete 115200 baud log.
+
+The Waveshare startup now checks `LittleFS.begin(false)` and requires
+`/Scenes.json`. If unavailable, it does **not** erase or automatically
+format flash; it displays a static storage-recovery screen and continues
+servicing the Wi-Fi stack/captive portal instead of constructing the full
+JSON UI without valid assets. Startup logs include reset reason and
+initialization stages.
+
+The `waveshare28v2_omote` build uses `Rev5Partitions.csv`. Its
+`spiffs`-named partition is used by **LittleFS** because the target
+selects `board_build.filesystem = littlefs`. Upload the `data/`
+directory as a dedicated filesystem image, using the **same target**:
+
+```bash
+# From Platformio/ after pulling this branch and compiling successfully
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote -t uploadfs
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote -t upload
+~/.platformio/penv/bin/platformio device monitor -p /dev/ttyACM0 -b 115200
+```
+
+**CAUTION:** `uploadfs` replaces the contents of the configured LittleFS
+partition. Back up any needed data first. It does **not** erase the
+entire 16 MB flash, but it is destructive **to that partition**.
+
+A successful boot should log that LittleFS mounted and `Scenes.json`
+was found. If rebooting persists, capture the full serial output from
+the `rst:` / `ESP-ROM` boot line through any `Guru Meditation`,
+`Backtrace`, `abort`, or subsequent reset.
+
+This experimental target no longer inherits the Rev5 LIS3DH, LTR329/
+LTR303, or MAX1704x dependencies. Its dormant LIS3DH translation unit is
+also excluded at compile time; no corresponding device initialization
+should run.
