@@ -14,7 +14,7 @@ env = DefaultEnvironment()
 buildEnv : SCons.Environment.Base = env
 
 # Pin ESP-IDF Python deps. Managed components are vendored (see ensureManagedComponents).
-if buildEnv["PIOENV"] in ("esp32_Rev1", "esp32_Rev5", "esp32_Rev5_3661", "esp32Debug"):
+if buildEnv["PIOENV"] in ("esp32_Rev1", "esp32_Rev5", "esp32_Rev5_3661", "esp32Debug", "waveshare28v2_omote"):
     buildEnv["ENV"]["PIP_CONSTRAINT"] = os.path.join(buildEnv["PROJECT_DIR"], "esp-idf-constraints.txt")
     buildEnv["ENV"]["IDF_COMPONENT_MANAGER"] = "0"
 
@@ -234,7 +234,7 @@ MANAGED_COMPONENTS = {
 
 def ensureManagedComponents():
     """Vendor IDF managed components (avoids component-manager git errors on Windows)."""
-    applicableBuildEnvs = ["esp32_Rev1", "esp32_Rev5", "esp32_Rev5_3661", "esp32Debug"]
+    applicableBuildEnvs = ["esp32_Rev1", "esp32_Rev5", "esp32_Rev5_3661", "esp32Debug", "waveshare28v2_omote"]
     if buildEnv["PIOENV"] not in applicableBuildEnvs:
         return
 
@@ -296,7 +296,7 @@ def ensureManagedComponents():
 
 def configureExtraComponentDirs():
     """PlatformIO only adds src/ + Arduino to EXTRA_COMPONENT_DIRS; include components/."""
-    applicableBuildEnvs = ["esp32_Rev1", "esp32_Rev5", "esp32_Rev5_3661", "esp32Debug"]
+    applicableBuildEnvs = ["esp32_Rev1", "esp32_Rev5", "esp32_Rev5_3661", "esp32Debug", "waveshare28v2_omote"]
     if buildEnv["PIOENV"] not in applicableBuildEnvs:
         return
 
@@ -317,7 +317,7 @@ def configureExtraComponentDirs():
 
 def patchLvglLittleFsDriver():
     """Patch LVGL Arduino LittleFS driver for Arduino core 3.x API."""
-    applicableBuildEnvs = ["esp32_Rev1", "esp32_Rev5", "esp32_Rev5_3661", "esp32Debug"]
+    applicableBuildEnvs = ["esp32_Rev1", "esp32_Rev5", "esp32_Rev5_3661", "esp32Debug", "waveshare28v2_omote"]
     if buildEnv["PIOENV"] not in applicableBuildEnvs:
         return
 
@@ -351,8 +351,40 @@ def patchLvglLittleFsDriver():
             f.write(content)
         print(f"Patched LVGL LittleFS driver: {lv_fs_path}")
 
+def checkFrameworkSpiCompatibility():
+    """Fail early if shared PlatformIO cache has an Arduino SPI/core mismatch.
+
+    Tasmota 2025.03.30 uses Arduino 3.1.3: SPI.cpp calls
+    spiFrequencyToClockDiv(freq) and its core declares the same one-arg API.
+    An updated core paired with old SPI.cpp fails after lengthy compilation.
+    """
+    if buildEnv["PIOENV"] != "waveshare28v2_omote":
+        return
+
+    platform = buildEnv.PioPlatform()
+    framework_dir = platform.get_package_dir("framework-arduinoespressif32")
+    if not framework_dir:
+        return
+    header_path = os.path.join(framework_dir, "cores", "esp32", "esp32-hal-spi.h")
+    if not os.path.isfile(header_path):
+        return
+    with open(header_path, "r", encoding="utf-8", errors="replace") as f:
+        header = f.read()
+    if not re.search(r"spiFrequencyToClockDiv\\s*\\(\\s*spi_t\\s*\\*", header):
+        return
+
+    raise RuntimeError(
+        "Waveshare OMOTE: incompatible global Arduino framework cache. "
+        "SPI.h has the NEW two-argument spiFrequencyToClockDiv(spi_t*, freq) "
+        "but Tasmota 2025.03.30 requires the Arduino 3.1.3 one-argument API. "
+        "Restore the matched Tasmota framework package (see "
+        "WAVESHARE28V2_PORT.md). Do not patch SPI.cpp or esp32-hal-spi.h."
+    )
+
+
 PrintInfo()
 # PrintEnv()
+checkFrameworkSpiCompatibility()
 EnsureSubmoduleCheckout()
 ensureManagedComponents()
 configureExtraComponentDirs()
