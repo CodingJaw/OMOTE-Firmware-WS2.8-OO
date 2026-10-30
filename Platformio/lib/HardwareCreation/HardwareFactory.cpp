@@ -1,6 +1,8 @@
 #include "HardwareFactory.hpp"
 
-#if defined(IS_SIMULATOR)
+#if defined(OMOTE_WAVESHARE28V2)
+#include "WaveshareHardware.hpp"
+#elif defined(IS_SIMULATOR)
 #include "HardwareSimulator.hpp"
 #elif (defined(OMOTE_HARDWARE_REV5))
 #include "HardwareRev5.hpp"
@@ -11,7 +13,9 @@
 std::unique_ptr<HardwareAbstract> HardwareFactory::mHardware = nullptr;
 
 void HardwareFactory::Init() {
-#if defined(IS_SIMULATOR)
+#if defined(OMOTE_WAVESHARE28V2)
+  mHardware = std::make_unique<WaveshareHardware>();
+#elif defined(IS_SIMULATOR)
   mHardware = std::make_unique<HardwareSimulator>();
 #elif (defined(OMOTE_HARDWARE_REV5))
   mHardware = std::make_unique<HardwareRev5>();
