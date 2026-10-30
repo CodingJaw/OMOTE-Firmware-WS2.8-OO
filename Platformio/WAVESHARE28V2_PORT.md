@@ -152,3 +152,35 @@ To return to the verified touchscreen test, rebuild and upload
 - Check navigation and settings without unsafe casts or hardware GPIO access.
 - Verify Wi-Fi/Web Configurator and Home Assistant only after base UI is stable.
 - Add TCA8418, IR and power systems using measured pins on the actual remote.
+
+### Fix for stale ESP-IDF 4 MB configuration
+
+The upstream checked-in `Platformio/sdkconfig.defaults` is a generated
+configuration for the **original ESP32** and explicitly selects 4 MB flash.
+The Waveshare target uses a separate `sdkconfig.defaults.waveshare28v2`
+that selects **16 MB**. ESP-IDF may keep an existing generated
+`sdkconfig.waveshare28v2_omote` with the old flash setting: defaults do
+not override previously set values in the generated configuration.
+
+After pulling changes, from `Platformio/`:
+
+```bash
+# Inspect the effective generated config before changing anything.
+grep -E '^CONFIG_(IDF_TARGET|ESPTOOLPY_FLASHSIZE)' \
+  sdkconfig.waveshare28v2_omote 2>/dev/null || true
+
+# Move aside ONLY the generated configuration of the experimental target.
+if test -f sdkconfig.waveshare28v2_omote; then
+  mv sdkconfig.waveshare28v2_omote sdkconfig.waveshare28v2_omote.bak
+fi
+
+# Reset ONLY the target's cached CMake and compilation outputs.
+rm -rf .pio/build/waveshare28v2_omote
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote
+```
+
+Do **not** delete `sdkconfig.defaults`, change `Rev5Partitions.csv`,
+or erase the board just to fix this warning. The hardware's flash was
+already reported as 16 MB by the platform; the 4 MB message is an ESP-IDF
+configuration discrepancy. This is separate from source/compiler errors.
+
