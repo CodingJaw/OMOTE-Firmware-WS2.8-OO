@@ -3,7 +3,7 @@
 #include "HardwareFactory.hpp"
 #include "HardwareAbstract.hpp"
 #include "RapidJsonUtilty.hpp"
-#ifndef IS_SIMULATOR
+#if !defined(IS_SIMULATOR) && !defined(OMOTE_WAVESHARE28V2)
 #include "display.hpp"
 #endif
 
@@ -298,7 +298,7 @@ void syncFromHardware() {
 
 void notifyActivity() {
   sLastActivityMs = millis();
-#ifndef IS_SIMULATOR
+#if !defined(IS_SIMULATOR) && !defined(OMOTE_WAVESHARE28V2)
   if (auto disp = std::static_pointer_cast<Display>(HardwareFactory::getAbstract().display())) {
     const bool needWake = sScreenPoweredOff || disp->isDisplayAsleep() ||
                           disp->isPreSleepDim() || disp->needsBacklightRestore();
