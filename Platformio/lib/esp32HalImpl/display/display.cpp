@@ -1,4 +1,4 @@
-#if !defined(IS_SIMULATOR)
+#if !defined(IS_SIMULATOR) && !defined(OMOTE_WAVESHARE28V2)
 
 #include "display.hpp"
 
@@ -552,5 +552,4 @@ void Display::flushDisplay(lv_disp_t *disp, const lv_area_t *area,
 
   lv_display_flush_ready(disp);
 }
-#endif // !IS_SIMULATOR
-
+#endif // !IS_SIMULATOR && !OMOTE_WAVESHARE28V2
