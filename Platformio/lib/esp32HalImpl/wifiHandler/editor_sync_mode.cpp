@@ -4,8 +4,6 @@
 
 #include "HardwareFactory.hpp"
 #include "device_settings.hpp"
-#include "display.hpp"
-#include "ir/IRTransceiver.hpp"
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -43,11 +41,11 @@ bool enter(bool showOverlay) {
   hw.setLightSleepTimeout(0);
   hw.setLightSleepEnabled(false);
 
-  if (auto *ir = static_cast<IRTransceiver *>(hw.ir().get()))
+  if (auto *ir = hw.ir().get())
     ir->disableRx();
 
   device_settings::notifyActivity();
-  if (auto disp = std::static_pointer_cast<Display>(HardwareFactory::getAbstract().display()))
+  if (auto disp = hw.display())
     disp->ensureTouchReady();
 
   return true;
@@ -67,15 +65,15 @@ void exit(bool reboot) {
   hw.setLightSleepTimeout(sSavedLightSleepTimeout ? sSavedLightSleepTimeout : 60000);
   hw.setLightSleepEnabled(sSavedLightSleepEnabled);
 
-  if (auto *ir = static_cast<IRTransceiver *>(hw.ir().get()))
+  if (auto *ir = hw.ir().get())
     ir->enableRx();
 
-  if (auto disp = std::static_pointer_cast<Display>(HardwareFactory::getAbstract().display()))
+  if (auto disp = hw.display())
     disp->ensureTouchReady();
 
   if (reboot) {
     device_settings::notifyActivity();
-    if (auto disp = std::static_pointer_cast<Display>(HardwareFactory::getAbstract().display()))
+    if (auto disp = hw.display())
       disp->wake();
     delay(80);
     ESP.restart();
