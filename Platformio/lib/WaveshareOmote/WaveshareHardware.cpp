@@ -105,12 +105,13 @@ void WaveshareHardware::init() {
   battery_ = std::make_shared<NoBattery>();
   ir_ = std::make_shared<NoIR>();
   stats_ = std::make_shared<EspStats>();
-  wifi_ = wifiHandler::getInstance();
-  wifi_->setupMqttBroker();
-  static_cast<wifiHandler *>(wifi_.get())->mqttRestoreCredentials();
-  static_cast<wifiHandler *>(wifi_.get())->ntpRestoreCredentials();
-  static_cast<wifiHandler *>(wifi_.get())->ftpRestoreCredentials();
-  static_cast<wifiHandler *>(wifi_.get())->setupNtp();
+  auto handler = wifiHandler::getInstance();
+  wifi_ = handler;
+  handler->mqttRestoreCredentials();
+  handler->setupMqttBroker();
+  handler->ntpRestoreCredentials();
+  handler->setupNtp();
+  handler->ftpRestoreCredentials();
 
   Serial.println("[waveshare28v2] Hardware interfaces ready; keypad/IR/IMU/sleep disabled");
 }
