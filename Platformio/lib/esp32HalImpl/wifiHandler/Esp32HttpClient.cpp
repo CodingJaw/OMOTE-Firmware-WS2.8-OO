@@ -1,3 +1,4 @@
+#ifndef OMOTE_SIM
 #include "Esp32HttpClient.hpp"
 #include <cstring>
 #include <esp_log.h>
@@ -296,3 +297,5 @@ esp_http_client_method_t Esp32HttpClient::methodToEspMethod(HttpRequest::Method 
     return HTTP_METHOD_GET;
   }
 }
+
+#endif // OMOTE_SIM
