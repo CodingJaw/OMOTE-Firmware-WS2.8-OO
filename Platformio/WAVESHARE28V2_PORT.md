@@ -229,6 +229,11 @@ filesystem. ESP-IDF then reports errors such as
 `Corrupted dir pair at {0x0, 0x1}` or `mount failed (-84)`.
 **Do not infer the reset cause from this message alone.** Examine the
 reset reason and any exception/backtrace from a complete 115200 baud log.
+A mount error may appear **twice**: LVGL 9.4's Arduino LittleFS driver
+calls `LittleFS.begin()` during `lv_init()`, then the Waveshare adapter
+calls `LittleFS.begin(false)` to check for the scene manifest. The
+Arduino core 3.1.3 `begin()` default is `formatOnFail=false`; neither
+attempt automatically formats the partition.
 
 The Waveshare startup now checks `LittleFS.begin(false)` and requires
 `/Scenes.json`. If unavailable, it does **not** erase or automatically
