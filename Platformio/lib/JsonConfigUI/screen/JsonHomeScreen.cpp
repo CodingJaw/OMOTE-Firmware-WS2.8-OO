@@ -10,9 +10,12 @@
 #include "LvglResourceManager.hpp"
 #include "SettingsPage.hpp"
 #include "editor_sync_mode.hpp"
+#include "device_settings.hpp"
 #if !defined(IS_SIMULATOR) && !defined(OMOTE_WAVESHARE28V2)
 #include "display.hpp"
-#include "device_settings.hpp"
+#endif
+#if !defined(OMOTE_SIM)
+#include "esp_attr.h" // RTC_DATA_ATTR retained across supported ESP32 sleep states.
 #endif
 #include <cstdio>
 #include <filesystem>
