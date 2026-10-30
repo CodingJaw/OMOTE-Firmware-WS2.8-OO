@@ -1,0 +1,15 @@
+{
+  "name": "WaveshareOmote",
+  "version": "0.1.0",
+  "description": "Safe OMOTE HAL adapter for Waveshare ESP32-S3-Touch-LCD-2.8 V2",
+  "dependencies": [
+    "HAL",
+    "Esp32HalImpl",
+    "Waveshare28V2"
+  ],
+  "build": {
+    "includeDir": "."
+  },
+  "frameworks": "arduino",
+  "platforms": "espressif32"
+}
