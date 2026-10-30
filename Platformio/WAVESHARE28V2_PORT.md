@@ -184,3 +184,38 @@ or erase the board just to fix this warning. The hardware's flash was
 already reported as 16 MB by the platform; the 4 MB message is an ESP-IDF
 configuration discrepancy. This is separate from source/compiler errors.
 
+
+### PSRAM and generic DevKit board label
+
+PlatformIO labels the generic `esp32-s3-devkitc-1` variant "N8 (8 MB QD,
+No PSRAM)", even when its flash and memory type settings are overridden.
+That label does **not** probe the actual Waveshare board. Waveshare's
+ESP32-S3-Touch-LCD-2.8 V2 has **16 MB flash and 8 MB octal PSRAM**.
+
+The `waveshare28v2_omote` target inherits `board_build.psram_type=opi`,
+`board_build.arduino.memory_type=qio_opi` and `BOARD_HAS_PSRAM` from
+`esp32_Rev5`. Its `sdkconfig.defaults.waveshare28v2` now also
+explicitly enables `CONFIG_SPIRAM=y`, octal PSRAM, 80 MHz and allocation
+through `malloc()`. Simply defining `BOARD_HAS_PSRAM` is not sufficient
+for a mixed Arduino + ESP-IDF build if IDF external-memory support is off.
+
+After compilation, the next firmware boot will report:
+`[waveshare28v2] Flash size: ... bytes, PSRAM total: ... bytes, PSRAM free: ... bytes`.
+Expected total PSRAM is approximately **8,388,608 bytes**. A zero total
+indicates PSRAM has not initialized, regardless of the generic board label.
+
+**On rebuild**, inspect the generated `sdkconfig.waveshare28v2_omote`.
+If an old configuration has disabled PSRAM, move that generated file aside
+and delete only `.pio/build/waveshare28v2_omote`, as described above.
+Do not alter the generic ESP32 board definition or the working diagnostic
+environment.
+
+### mDNS compiler include error
+
+ESP-IDF's mDNS component is vendored at
+`components/espressif__mdns/include/mdns.h`. The Arduino framework's
+`ESPmDNS` and `ArduinoOTA` libraries compile separately and need its
+include directory explicitly; the Waveshare OMOTE target now adds
+`-I components/espressif__mdns/include` alongside the WebSocket
+component include directory. This avoids modifying third-party framework
+headers and is limited to the experimental target.
