@@ -370,7 +370,7 @@ def checkFrameworkSpiCompatibility():
         return
     with open(header_path, "r", encoding="utf-8", errors="replace") as f:
         header = f.read()
-    if not re.search(r"spiFrequencyToClockDiv\\s*\\(\\s*spi_t\\s*\\*", header):
+    if not re.search(r"spiFrequencyToClockDiv\s*\(\s*spi_t\s*\*", header):
         return
 
     raise RuntimeError(
