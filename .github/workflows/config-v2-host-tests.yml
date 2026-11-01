@@ -1,0 +1,24 @@
+name: Config v2 host safety tests
+
+on:
+  push:
+    branches:
+      - feature/config-v2-transactional
+  pull_request:
+    paths:
+      - 'Platformio/lib/esp32HalImpl/wifiHandler/config_v2_*'
+      - 'Platformio/tools/config-v2-tests/**'
+      - '.github/workflows/config-v2-host-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  host-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout development branch
+        uses: actions/checkout@v4
+      - name: Compile and run isolated storage tests
+        run: bash Platformio/tools/config-v2-tests/run-host-tests.sh
