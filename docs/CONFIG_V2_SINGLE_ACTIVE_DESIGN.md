@@ -24,7 +24,7 @@ unchanged while no `omotecfg/active` key exists in NVS.
   selected but damaged generation enters the firmware-owned recovery screen.
   **This has not been exercised on physical hardware.**
 - The Waveshare initialization, scene registry, scene, page and command JSON
-  readers now use the selected resolver in this preview build. The old root
+  readers now use the selected resolver in this preview build. Image widgets\n  additionally map active objects to the Waveshare LVGL LittleFS driver A:,\n  but decoding extensionless object filenames is not hardware-tested. The old root
   remains unmodified. The read-only v1 filesystem API reflects the same
   selected public paths and will not disclose settings files in the tree.
   `GET /api/config/v2/storage/status` also reports
