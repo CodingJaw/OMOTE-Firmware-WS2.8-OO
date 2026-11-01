@@ -6,7 +6,7 @@
 // never combining legacy-root and v2 files mid-scene.
 #include "config_v2_manifest_format.hpp"
 #include "config_v2_path_policy.hpp"
-#include "config_v2_generation_selection.hpp"
+#include "config_v2_digest.hpp"
 #include <map>
 #include <string>
 #include <utility>
@@ -22,7 +22,7 @@ class Pinned {
 public:
   bool bind(const config_v2_manifest_format::Manifest &manifest) {
     clear();
-    if (!config_v2_generation::revisionIdValid(manifest.revision) ||
+    if (!config_v2_digest::valid(manifest.revision) ||
         !config_v2_manifest_index::validate(manifest.files).ok())
       return false;
     std::map<std::string, Object> entries;
