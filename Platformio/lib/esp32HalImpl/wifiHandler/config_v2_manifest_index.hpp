@@ -5,7 +5,7 @@
 // No filesystem, network or Arduino dependencies; only explicit allowlisted
 // configuration files can enter an immutable generation index.
 #include "config_v2_path_policy.hpp"
-#include "config_v2_generation_selection.hpp"
+#include "config_v2_digest.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -64,7 +64,7 @@ inline Result validate(const std::vector<Entry> &entries) {
       result.error = Error::DuplicatePath;
       return result;
     }
-    if (!config_v2_generation::revisionIdValid(entry.sha256)) {
+    if (!config_v2_digest::valid(entry.sha256)) {
       result.error = Error::InvalidHash;
       return result;
     }
