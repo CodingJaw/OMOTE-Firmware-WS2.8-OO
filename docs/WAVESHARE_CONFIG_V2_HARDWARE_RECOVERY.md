@@ -8,7 +8,7 @@ enable HACS deployments or modify LittleFS contents.
 ## Current test constraints (user confirmed)
 
 - Only **one** Waveshare, currently functional.
-- **No verified flash backup** yet.
+- **User reports** the full-flash double read and saved SHA-256 checksum both passed. This is an integrity-verified backup, **not** a proven restore. The offline layout inspector below provides an additional check.
 - No battery installed; USB disconnect fully removes device power.
 - Touchscreen/scenes/local UI can be tested now; IR/BLE hardware tests are not
   currently available.
@@ -44,9 +44,42 @@ credentials. They must be stored securely **outside the Git repository**.
 No automatic restore command is supplied; restoration is destructive and
 requires a separate, deliberate board-specific check.
 
-**Next test gate:** Once backup comparison succeeds, first test a manual
-non-destructive recovery path (serial access, known-good firmware source,
-`Scenes.json` presence and offline UI) before any deliberate power-cut test.
+## Additional offline backup-layout verification (no serial access required)
+
+The user reports that the two complete reads match and the checksum check
+returned `OK`. Check that the file's boot headers and partition table also
+match the known Waveshare firmware layout:
+
+```bash
+cd Platformio
+BACKUP="$(ls -td ~/omote-backups/waveshare28v2-* | head -1)"
+python3 tools/config-v2-tests/inspect-waveshare-backup.py \
+  "$BACKUP/waveshare-esp32s3-16mb-full-flash.bin"
+```
+
+Expected message:
+
+```text
+PASS: saved SHA-256 checksum and expected 16 MiB boot/partition layout.
+```
+
+The inspection performs a **read-only** streaming SHA-256 comparison and
+checks ESP image headers and the exact expected partition entries:
+NVS `0x9000/0x5000`, OTA data `0xe000/0x2000`, app `0x10000/0xa00000`,
+LittleFS partition `0xa10000/0x5e0000`, coredump `0xff0000/0x10000`.
+It never prints firmware bytes, passwords or LittleFS content.
+
+The inspector deliberately rejects unreadable/encrypted/unknown image layouts
+rather than treating them as verified. It cannot prove that the backup will
+boot after restoration. Do not restore the image to the sole working board
+merely to verify this checker.
+
+**Next test gate:** Once the offline layout check passes, confirm serial
+access, retain a known-good firmware build/source, check `Scenes.json`
+availability using existing read-only API, and check standalone UI after
+disconnecting Wi-Fi. Before any deliberate power-cut fault injection, the
+operator must still have a reviewed manual restore procedure; actual recovery
+remains unproven until hardware restoration succeeds.
 
 ## Safe regression testing (no configuration activation)
 
