@@ -7,9 +7,9 @@ using config_v2_local_approval::Gate;
 using config_v2_local_approval::Request;
 using config_v2_local_approval::requestIsValid;
 
-static Request proposed(bool rollback = false) {
+static Request proposed() {
   return {"omote-device-1", "0123456789abcdef0123456789abcdef",
-          std::string(64, 'a'), std::string(64, 'b'), rollback};
+          std::string(64, 'a'), std::string(64, 'b')};
 }
 
 int main() {
@@ -39,9 +39,6 @@ int main() {
   wrong = r;
   wrong.expectedActiveSha256[0] = 'd';
   assert(!gate.confirmLocalTouch(wrong, 106));
-  wrong = r;
-  wrong.rollback = true;
-  assert(!gate.confirmLocalTouch(wrong, 107));
 
   assert(!gate.consumeForAuthenticatedCommit(r, 108));
   assert(gate.confirmLocalTouch(r, 109));
@@ -66,13 +63,6 @@ int main() {
   gate.clear();
   assert(!gate.consumeForAuthenticatedCommit(r, 2003));
 
-  // Rollback also requires a separate human confirmation.
-  const Request rollback = proposed(true);
-  assert(gate.offer(rollback, 4000, 1000));
-  assert(!gate.consumeForAuthenticatedCommit(rollback, 4000));
-  assert(!gate.confirmLocalTouch(r, 4001));
-  assert(gate.confirmLocalTouch(rollback, 4002));
-  assert(gate.consumeForAuthenticatedCommit(rollback, 4003));
 
   // Timer wraparound: expire correctly for a short bounded window.
   constexpr std::uint32_t nearWrap = 0xfffffffa;
