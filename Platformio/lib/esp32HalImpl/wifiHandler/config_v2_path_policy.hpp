@@ -32,6 +32,19 @@ inline bool jsonFile(std::string_view path) {
   return path.size() >= 5 && path.substr(path.size() - 5) == ".json";
 }
 
+// Assets are explicit allowlisted media types, not arbitrary executable data.
+// WebP may be enabled later only if supported by the firmware's LVGL decoder.
+inline bool imageAsset(std::string_view path) {
+  if (path.substr(0, 7) != "Images/")
+    return false;
+  constexpr std::string_view extensions[] = {".png", ".jpg", ".jpeg", ".bmp"};
+  for (auto extension : extensions)
+    if (path.size() > extension.size() &&
+        path.substr(path.size() - extension.size()) == extension)
+      return true;
+  return false;
+}
+
 inline bool isConfigSubdirectory(std::string_view path) {
   constexpr std::string_view prefixes[] = {
       "Scenes/", "Pages/", "Commands/", "Devices/", "Actions/"};
@@ -47,7 +60,8 @@ inline bool publicReadable(std::string_view path) {
   if (!safeRelative(path))
     return false;
   return path == "Scenes.json" || path == "DeviceSettings.schema.json" ||
-         path == "logSettings.json" || isConfigSubdirectory(path);
+         path == "logSettings.json" || isConfigSubdirectory(path) ||
+         imageAsset(path);
 }
 
 // A future authenticated v2 deployment MAY accept these paths, but only after
