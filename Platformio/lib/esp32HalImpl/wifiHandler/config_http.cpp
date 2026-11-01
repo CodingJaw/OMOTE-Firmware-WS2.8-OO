@@ -8,6 +8,9 @@
 #include "device_settings.hpp"
 #include "device_settings_schema.hpp"
 #include "editor_sync_mode.hpp"
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+#include "config_v2_path_policy.hpp"
+#endif
 #include "ir/IRTransceiver.hpp"
 #include "LvglResourceManager.hpp"
 
@@ -137,29 +140,21 @@ bool sendFsReadJson(const std::string &path, const std::string &content) {
 }
 
 bool isSafePath(const std::string &path) {
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+  return config_v2_path_policy::safeRelative(path);
+#else
   if (path.empty() || path[0] == '/' || path.find("..") != std::string::npos ||
       path.find('\\') != std::string::npos)
     return false;
   return true;
+#endif
 }
 
 #if defined(OMOTE_CONFIG_V2_PREVIEW)
 // v1 is a *public*, read-only discovery interface in this build.
 // Keep credentials and runtime settings private until authenticated v2 reads exist.
 bool isPublicConfigPath(const std::string &path) {
-  if (!isSafePath(path))
-    return false;
-  if (path == "Scenes.json" || path == "DeviceSettings.schema.json" ||
-      path == "logSettings.json")
-    return true;
-  if (path.size() < 5 || path.compare(path.size() - 5, 5, ".json") != 0)
-    return false;
-  static constexpr const char *prefixes[] = {
-      "Scenes/", "Pages/", "Commands/", "Devices/", "Actions/"};
-  for (const char *prefix : prefixes)
-    if (path.rfind(prefix, 0) == 0)
-      return true;
-  return false;
+  return config_v2_path_policy::publicReadable(path);
 }
 
 void handleV1MutationDisabled() {
