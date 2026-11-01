@@ -8,6 +8,7 @@
 #include "config_v2_path_policy.hpp"
 #include "config_v2_digest.hpp"
 #include <map>
+#include <vector>
 #include <string>
 #include <utility>
 
@@ -50,6 +51,16 @@ public:
       return false;
     out = "/littlefs/omote-v2/objects/" + object->sha256;
     return true;
+  }
+
+  std::vector<std::string> publicPaths() const {
+    std::vector<std::string> result;
+    if (revision_.empty())
+      return result;
+    for (const auto &entry : objects_)
+      if (config_v2_path_policy::publicReadable(entry.first))
+        result.push_back(entry.first);
+    return result;
   }
 
   void clear() {
