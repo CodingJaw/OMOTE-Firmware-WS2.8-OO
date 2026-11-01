@@ -1,12 +1,19 @@
 #include "Command.hpp"
 #include "HardwareFactory.hpp"
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && !defined(IS_SIMULATOR)
+#include "config_v2_single_active_runtime.hpp"
+#endif
 #include <fstream>
 
 using namespace Command;
 
 CommandMode Commands::getCommand(const std::string &aCommandFile, const std::string &aCommandPrefix, const std::string &aCommand, CommandStruct &aCommandStruct) {
 
-  std::filesystem::path commandFilePath(FS_PATH + aCommandFile);
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && !defined(IS_SIMULATOR)
+  const std::filesystem::path commandFilePath = config_v2_single_active_runtime::resolveVfsPath(aCommandFile);
+#else
+  const std::filesystem::path commandFilePath(FS_PATH + aCommandFile);
+#endif
 
   rapidjson::Document d = OMOTE::JSON::GetDocument(commandFilePath);
   if (d.HasParseError() || d.IsNull())
