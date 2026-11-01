@@ -22,12 +22,12 @@ int main() {
   assert(m.files[1].length == 48);
   // An identical graph with noncanonical whitespace or duplicate/extra keys
   // must be rejected rather than acquiring a distinct revision digest.
-  assert(!decode(json + "\\n", m));
+  assert(!decode(json + std::string(1, char(10)), m));
   assert(!decode(std::string(" ") + json, m));
   std::string extra = json;
-  const auto head = extra.find("\\"files\\":");
+  const auto head = extra.find(R"("files":)");
   assert(head != std::string::npos);
-  extra.insert(head, "\\"extra\\":true,");
+  extra.insert(head, R"("extra":true,)");
   assert(!decode(extra, m));
   std::string tampered = json;
   tampered[0] = 'X';
