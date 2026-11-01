@@ -28,6 +28,41 @@ Do not flash this branch as a replacement for a proven working remote before a t
   hardware adapter still has an IR placeholder; this plan does not claim IR/BLE
   is already implemented on that port.
 
+## Additional user decisions — October 31, 2026
+
+- **USB testing authorized on the current Waveshare** for controlled trials of
+  the `feature/config-v2-transactional` branch. Do not merge into the stable
+  `waveshare28v2-port` branch or automatically flash firmware from HACS.
+  Capture a verified backup and preserve a known-good firmware/recovery path.
+- **Every individual deployment**, even after device pairing, requires an HA
+  administrator confirmation AND a new explicit physical touchscreen approval
+  on the *target* remote. Previous confirmations must never carry over.
+- **Automatic mDNS discovery** via `_omote._tcp.local.` with TXT `id`, `api`
+  and `model`, plus manual IP/hostname fallback. Discovery is *not* pairing,
+  authentication, proof of identity, or approval for a deployment.
+- User confirmed that the existing Home Assistant integration's read-only
+  backup and disconnect/reconnect behavior both work.
+
+### Current implementation of these decisions (not deployable)
+
+The preview firmware advertises an additional `_omote._tcp` mDNS service
+with `id=<12 lowercase efuse-MAC hex>`, `api=omote-config-v1`, and
+`model=waveshare28v2`. This runs alongside its existing `_http._tcp`
+announcement only when Wi-Fi is connected. The TXT ID is an unauthenticated
+discovery hint and must not become a permanent trusted device identity.
+mDNS cannot control IR/BLE or block the LVGL/UI task.
+
+`config_v2_local_approval.hpp` is a pure C++ gate for future deployment
+and rollback requests. Its host tests verify a fresh request-specific local
+approval, expiration, mismatch rejection, cancellation, replay rejection,
+and one-time consumption. It requires a fresh 32-hex transaction identifier
+and 64-hex SHA-256 proposal/base revision. No HTTP endpoint, GUI touchscreen
+callback, persistent authorization secret, or live commit handler is connected
+to this gate. In particular, `confirmLocalTouch` MUST only be called by a
+trusted **local touchscreen gesture**, never by any remote network API.
+The network side must independently verify authentication and administrator
+approval; the gate is a necessary, not sufficient, commit precondition.
+
 ## Current implementation in this branch — stage 0, fail-closed
 
 The `OMOTE_CONFIG_V2_PREVIEW` build flag is enabled only for
@@ -270,6 +305,13 @@ Sensitive documents must never appear in the public v1 read surface.
 
 ### Outstanding stages
 
+- [x] Dedicated read-only `_omote._tcp.local.` mDNS discovery announcement
+  in the preview build only (pending build/hardware verification).
+- [x] Host-testable per-deployment physical approval gate (not yet connected
+  to touchscreen UI, pairing, or authenticated commit).
+- [ ] Actual local touchscreen confirmation UI and secure transaction-to-device
+  identity binding, verified in physical hardware tests.
+
 - [x] Dedicated development branch and locked-down v1 preview.
 - [x] Read-only negative-capabilities response.
 - [x] Pure path policy and initial host regression tests.
@@ -283,6 +325,9 @@ Sensitive documents must never appear in the public v1 read surface.
   implementation (not wired to any network endpoint).
 - [x] JSON-with-comments graph integrity/reference validator and host tests
   (not integrated into activation; hardware latency not yet measured).
+- `config_v2_local_approval.hpp`: per-request, time-limited one-time local
+  touchscreen approval gate with host tests (not wired into a live GUI/HTTP
+  transaction). It is separate from the first-time pairing process.
 - [x] Read-only LittleFS capacity diagnostics; private v1 settings reads denied.
 - [ ] On-device compilation and network security inspection.
 - [ ] Config storage resolver and migration with immutable objects.
@@ -293,6 +338,23 @@ Sensitive documents must never appear in the public v1 read surface.
 - [ ] Browser editor v2 migration.
 - [ ] Physical Waveshare power-cut and latency acceptance tests.
 - [ ] Explicit approval before merging.
+
+## mDNS discovery acceptance procedure (read-only)
+
+Once the host tests and the experimental Waveshare build succeed, flash only
+the feature branch using a controlled USB test. In Home Assistant, with
+`zeroconf` enabled, the firmware should appear as an **OMOTE Manager discovered
+device** and require explicit human confirmation. Manual setup using the
+remote's LAN IP or `omote.local` must still work. A previously installed
+device under the same IP or hostname must not be added twice. No remote
+configuration write route is enabled by mDNS.
+
+Test both: (1) same known remote discovered repeatedly, and (2) a restart
+or Wi-Fi outage. Verify that scene switching and touchscreen input remain
+functional offline; discovery must not change control behavior. Do **not**
+claim device pairing or deployment authorization from this advertisement.
+The local approval state machine cannot be exercised through a live GUI until
+a properly authenticated firmware transaction UI is implemented.
 
 ## Stage 1 device test procedure (read-only)
 

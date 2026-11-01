@@ -766,6 +766,22 @@ void sync() {
   if (!mdnsStarted) {
     if (MDNS.begin(mdnsHost.c_str())) {
       MDNS.addService("http", "tcp", 80);
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+      // Read-only service advertisement for Home Assistant's zeroconf
+      // integration. The TXT "id" is a discovery hint (silicon MAC) and
+      // must never be treated as a cryptographic device identity or
+      // authorization for pairing, transactions, or firmware upgrades.
+      // Do not add network mutation routes merely because mDNS is present.
+      char discoveryId[13] = {};
+      const unsigned long long efuseId =
+          static_cast<unsigned long long>(ESP.getEfuseMac());
+      snprintf(discoveryId, sizeof(discoveryId), "%012llx",
+               efuseId & 0xffffffffffffULL);
+      MDNS.addService("omote", "tcp", 80);
+      MDNS.addServiceTxt("omote", "tcp", "id", discoveryId);
+      MDNS.addServiceTxt("omote", "tcp", "api", "omote-config-v1");
+      MDNS.addServiceTxt("omote", "tcp", "model", "waveshare28v2");
+#endif
       mdnsStarted = true;
       if (logger)
         logger->info("HTTP config API at http://" + mdnsHost + ".local/api/status");
