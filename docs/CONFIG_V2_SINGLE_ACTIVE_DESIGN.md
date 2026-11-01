@@ -43,6 +43,26 @@ unchanged while no `omotecfg/active` key exists in NVS.
   advertises `transaction_support=false` and `rollback_support=false`,
   and must not be used for a HACS deployment.
 
+### Hardware smoke test and validation hardening — 2026-11-01
+
+The user confirmed a successful Waveshare 2.8 V2 build/USB flash, normal
+touchscreen/scene behavior, HACS reconnect and existing configuration import.
+The physical device returned `storage_model=single-active`,
+`config_mode=legacy`, `recovery_required=false`, and the preview
+capabilities correctly advertised `transaction_support=false`,
+`auth_mode=not-implemented`, and `legacy_http_writes_disabled=true`.
+This is a **read-only smoke test**, not a proof of authenticated write safety,
+active-manifest boot, network recovery, or power-loss recovery.
+
+The next isolated feature-branch changes require **full cross-file graph
+validation at active-manifest boot**, beyond object digests and scene registry
+syntax, before JsonUI can run. Portable manifests now **reject**
+`DeviceSettings.json`, `HaSettings.json`, MQTT/FTP/NTP credentials and
+other private files; a separate encrypted, device-specific opt-in settings
+protocol must be designed before these can be changed remotely. The private
+legacy root settings remain untouched. These new changes are pending
+hardware validation and must not enable remote deployment.
+
 **Remaining coverage blockers before activation:** image assets via LVGL,
 any filesystem readers for JSON devices/actions, settings and caches, safe
 network recovery/provisioning, authenticated encrypted pairing and the
