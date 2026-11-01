@@ -1,4 +1,4 @@
-// Run: c++ -std=c++17 -Wall -Wextra -Werror -o /tmp/omote-path-test \
+// Run: c++ -std=c++17 -Wall -Wextra -Werror -o /tmp/omote-path-test
 //          Platformio/tools/config-v2-tests/path_policy_test.cpp && /tmp/omote-path-test
 #include "../../lib/esp32HalImpl/wifiHandler/config_v2_path_policy.hpp"
 #include <cassert>
