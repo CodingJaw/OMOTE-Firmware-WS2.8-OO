@@ -20,6 +20,15 @@ int main() {
   assert(m.revision == revision);
   assert(m.files[0].path == "Commands/TV.json");
   assert(m.files[1].length == 48);
+  // An identical graph with noncanonical whitespace or duplicate/extra keys
+  // must be rejected rather than acquiring a distinct revision digest.
+  assert(!decode(json + "\\n", m));
+  assert(!decode(std::string(" ") + json, m));
+  std::string extra = json;
+  const auto head = extra.find("\\"files\\":");
+  assert(head != std::string::npos);
+  extra.insert(head, "\\"extra\\":true,");
+  assert(!decode(extra, m));
   std::string tampered = json;
   tampered[0] = 'X';
   assert(!decode(tampered, m));
