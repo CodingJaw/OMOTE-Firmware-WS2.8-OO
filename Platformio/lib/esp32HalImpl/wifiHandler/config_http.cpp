@@ -10,6 +10,7 @@
 #include "editor_sync_mode.hpp"
 #if defined(OMOTE_CONFIG_V2_PREVIEW)
 #include "config_v2_path_policy.hpp"
+#include "config_v2_single_active_runtime.hpp"
 #endif
 #include "ir/IRTransceiver.hpp"
 #include "LvglResourceManager.hpp"
@@ -184,6 +185,15 @@ void handleV2StorageStatus() {
   d.AddMember("selector_initialized", false, a);
   d.AddMember("selector_sequence", static_cast<uint64_t>(0), a);
   d.AddMember("generation_activation_enabled", false, a);
+  const auto active = config_v2_single_active_runtime::snapshot();
+  d.AddMember("storage_model", "single-active", a);
+  d.AddMember("config_mode",
+              active.mode == config_v2_single_active_runtime::Mode::Active ? "active" :
+              active.mode == config_v2_single_active_runtime::Mode::Recovery ? "recovery" : "legacy", a);
+  d.AddMember("recovery_required",
+              active.mode == config_v2_single_active_runtime::Mode::Recovery, a);
+  d.AddMember("recovery_reason", jsonCopy(active.reason, a), a);
+  d.AddMember("active_revision_sha256", jsonCopy(active.revision, a), a);
   sendJson(200, OMOTE::JSON::ToString(d));
 }
 
@@ -275,7 +285,15 @@ void handleStatus() {
 
 void handleFsTree() {
   std::vector<std::string> files;
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+  const auto mode = config_v2_single_active_runtime::snapshot().mode;
+  if (mode == config_v2_single_active_runtime::Mode::Active)
+    files = config_v2_single_active_runtime::publicPaths();
+  else if (mode == config_v2_single_active_runtime::Mode::Legacy)
+    collectFiles("/", files, "");
+#else
   collectFiles("/", files, "");
+#endif
   std::sort(files.begin(), files.end());
 
   rapidjson::Document d;
@@ -304,7 +322,11 @@ bool openFsPath(const std::string &path, File &out, size_t &outSize) {
   if (!isSafePath(path))
     return false;
 #endif
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+  const std::string lfs = config_v2_single_active_runtime::resolveLittleFsPath(path);
+#else
   const std::string lfs = lfsPath(path);
+#endif
   if (!LittleFS.exists(lfs.c_str()))
     return false;
   out = LittleFS.open(lfs.c_str(), "r");
@@ -442,7 +464,11 @@ void handleFsRead() {
     return;
   }
 
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+  std::ifstream file(config_v2_single_active_runtime::resolveVfsPath(path), std::ios::in);
+#else
   std::ifstream file(vfsPath(path), std::ios::in);
+#endif
   if (!file) {
     sendJson(404, "{\"error\":\"not found\"}");
     return;
