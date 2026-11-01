@@ -8,6 +8,7 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <Preferences.h>
+#include <rapidjson/document.h>
 #include <algorithm>
 #include <string>
 
@@ -28,10 +29,25 @@ bool validSceneRegistry(const std::string &path) {
   File f = LittleFS.open(path.c_str(), "r");
   if (!f || f.isDirectory() || f.size() == 0 || f.size() > 256u * 1024u)
     return false;
-  // Do not parse or display user-controlled text in this boot-time safety check.
-  // The runtime JSON loader performs the actual JSONC parse when rendering.
+  // Parse the scene registry before allowing JsonUI to touch user JSON.
+  // Bounded: Scenes.json may be at most 256 KiB.
+  std::string bytes;
+  bytes.reserve(f.size());
+  while (f.available()) {
+    char buf[512];
+    const size_t n = f.readBytes(buf, std::min<size_t>(sizeof(buf), f.available()));
+    if (!n) {
+      f.close();
+      return false;
+    }
+    bytes.append(buf, n);
+    yield();
+  }
   f.close();
-  return true;
+  rapidjson::Document doc;
+  doc.Parse<rapidjson::kParseCommentsFlag>(bytes.data(), bytes.size());
+  return !doc.HasParseError() && doc.IsObject() && doc.HasMember("Scenes") &&
+         doc["Scenes"].IsArray() && !doc["Scenes"].Empty();
 }
 } // namespace
 
@@ -101,11 +117,6 @@ void beginReadOnly(bool mounted) {
       recovery("active-object-invalid");
       return;
     }
-  }
-  const std::string scenePath = resolveVfsPath("Scenes.json");
-  if (scenePath.empty()) {
-    recovery("active-scenes-missing");
-    return;
   }
   const auto object = pinned.find("Scenes.json");
   if (!object || !validSceneRegistry(("/omote-v2/objects/" + object->sha256))) {
