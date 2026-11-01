@@ -778,7 +778,7 @@ void sync() {
       snprintf(discoveryId, sizeof(discoveryId), "%012llx",
                efuseId & 0xffffffffffffULL);
       MDNS.addService("omote", "tcp", 80);
-      MDNS.addServiceTxt("omote", "tcp", "id", discoveryId);
+      MDNS.addServiceTxt("omote", "tcp", "id", static_cast<const char *>(discoveryId));
       MDNS.addServiceTxt("omote", "tcp", "api", "omote-config-v1");
       MDNS.addServiceTxt("omote", "tcp", "model", "waveshare28v2");
 #endif
