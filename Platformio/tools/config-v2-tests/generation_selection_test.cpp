@@ -1,4 +1,4 @@
-// Run: c++ -std=c++17 -Wall -Wextra -Werror -o /tmp/omote-gen-test \
+// Run: c++ -std=c++17 -Wall -Wextra -Werror -o /tmp/omote-gen-test
 //          Platformio/tools/config-v2-tests/generation_selection_test.cpp && /tmp/omote-gen-test
 #include "../../lib/esp32HalImpl/wifiHandler/config_v2_generation_selection.hpp"
 #include <cassert>
