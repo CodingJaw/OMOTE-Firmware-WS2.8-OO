@@ -134,7 +134,7 @@ void WaveshareHardware::init() {
     Serial.println("[waveshare28v2] LittleFS mounted but Scenes.json missing");
 #endif
   } else {
-    Serial.println("[waveshare28v2] LittleFS mounted; Scenes.json found");
+    Serial.println("[waveshare28v2] LittleFS mounted; usable configuration selected");
   }
 
   Serial.println("[waveshare28v2] init: starting ST7789 + CST3530");
