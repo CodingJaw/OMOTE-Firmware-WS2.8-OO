@@ -10,6 +10,10 @@ on:
       - 'Platformio/tools/config-v2-tests/**'
       - '.github/workflows/config-v2-host-tests.yml'
 
+concurrency:
+  group: config-v2-host-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
