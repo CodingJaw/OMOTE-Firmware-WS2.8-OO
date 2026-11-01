@@ -26,5 +26,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Install firmware-compatible JSON parser headers
         run: sudo apt-get update -qq && sudo apt-get install -y -qq rapidjson-dev
+      - name: Check hardware backup script syntax (never execute it in CI)
+        run: bash -n Platformio/tools/config-v2-tests/backup-waveshare-full-flash.sh
       - name: Compile and run isolated storage tests
         run: bash Platformio/tools/config-v2-tests/run-host-tests.sh
