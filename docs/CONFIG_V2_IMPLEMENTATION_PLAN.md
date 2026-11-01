@@ -1,0 +1,204 @@
+# OMOTE config v2 — implementation plan (issue #1)
+
+Status: **development, incomplete, not deployable**. The user authorized implementation on this
+branch only, with hardware tests before any merge into `waveshare28v2-port`.
+Do not flash this branch as a replacement for a proven working remote before a tested recovery procedure exists.
+
+## User decisions (2026-10-31)
+
+- Internal LittleFS is the only required storage. An SD card is never required.
+- A/B means the active and previous confirmed configuration generation. A staging
+  area is additionally required *during* a transaction.
+- Pairing is manually approved on the touchscreen with a one-time code.
+- Pick encrypted, authenticated transport after real ESP32-S3 memory/latency testing.
+- Disable **all** unauthenticated v1 HTTP mutation endpoints; v1 reads of
+  non-sensitive configuration remain available.
+- Safe reboot activation is the default; hot reload is an optional validated
+  optimization only after the complete UI scene graph can be switched coherently.
+- Automatically roll back **only** after local boot/config/UI-health failure,
+  never because Home Assistant or Wi-Fi is unavailable.
+- Authenticated v2 deployment should eventually support sensitive configuration
+  (DeviceSettings, HA credentials, MQTT/FTP credentials) with explicit per-device
+  approval and extra secret-handling protections.
+- Shared profile definitions may be reused across devices, but each device
+  requires an explicit, independently authenticated deployment approval.
+- Touch responsiveness and scene switching have priority over upload throughput.
+- The remote must remain usable **without Wi-Fi or Home Assistant**. BLE and IR
+  must remain decoupled from network initialization. The current Waveshare
+  hardware adapter still has an IR placeholder; this plan does not claim IR/BLE
+  is already implemented on that port.
+
+## Current implementation in this branch — stage 0, fail-closed
+
+The `OMOTE_CONFIG_V2_PREVIEW` build flag is enabled only for
+`waveshare28v2_omote`. It:
+- Keeps the v1 status and public, non-secret filesystem read endpoints.
+- Responds HTTP 403 to all registered v1 HTTP mutation routes
+  (file write/delete, device settings, reboot, sync, IR learn start/stop).
+- Redacts MQTT and FTP passwords from `GET /api/device/settings`.
+- Restricts anonymous file reads and directory listings using the host-testable
+  `config_v2_path_policy.hpp` allowlist; it blocks `HaSettings.json`,
+  `DeviceSettings.json`, `mqtt.json`, `ftp.json`, state caches and internal paths.
+- Emits no cross-origin permissions in the preview build.
+- Does not service the legacy FTP server (an alternate write mechanism).
+- Adds read-only `GET /api/config/v2/capabilities` returning
+  `transaction_support=false`, `rollback_support=false`,
+  `auth_mode=not-implemented`, and zero deployment limits.
+
+These controls **do not** constitute a secure v2 implementation; do not enable
+HACS deployment based on a version string. The stock browser editor's remote
+write and cross-origin features are intentionally unavailable in the preview.
+Serial `uploadfs` remains the physical recovery path. All other firmware
+targets retain existing behavior until reviewed.
+
+## Architecture: content-addressed generations in LittleFS
+
+The existing Waveshare partition table contains a 0x5E0000-byte (~5.875 MiB)
+LittleFS partition. Capacity must be tested against actual scene assets and
+flash erase overhead.
+
+A/B refers to two *confirmed configuration revision pointers* rather than a
+requirement to duplicate every file. Proposed layout:
+
+```text
+/littlefs/
+  Scenes.json                   # legacy root during migration / recovery
+  Scenes/ Pages/ Commands/ ...  # existing working files
+  omote-v2/
+    objects/<sha256>            # immutable, content-addressed file bodies
+    manifests/<rev>.json        # immutable path -> length, sha256, type map
+    staging/<transaction-id>/   # interrupted transactions / temporary objects
+```
+
+Two redundant NVS records select the active revision, previous confirmed
+revision, pending trial revision and monotonic record counter. Verify their
+checksums and referenced manifests before selecting a revision. Do **not**
+assume NVS writes, FAT directory moves, or one-file rename make an entire
+JSON graph atomic. Never modify an object that belongs to an active manifest.
+
+This approach shares unchanged blobs across generations, reducing flash wear
+and storage compared with copying entire directory trees. During deployment,
+both confirmed generations plus staged new objects must remain recoverable.
+Compute conservative free-space requirements **before** beginning an upload.
+Do not erase the last confirmed generation simply to fit a new upload.
+
+### Migration from current root files
+
+Current code uses fixed `FS_PATH` and `std::ifstream` paths:
+- `JsonHomeScreen.cpp` loads `Scenes.json` and individual scenes.
+- `JsonPage.cpp` loads page JSON; widgets can load image assets through LVGL.
+- `Command.cpp` loads command JSON.
+- `HaRuntime.cpp`, `device_settings.cpp`, schema and logging/network
+  components read and write their own JSON or Preferences files.
+- `config_http.cpp` directly operates on `LittleFS`.
+
+Introduce a single configuration resolver returning a pinned generation for a
+whole scene load; update **all** readers, asset paths, and relevant writers.
+A scene must never resolve half its files from A and half from B. Keep the
+existing root configuration untouched until a validated v2 generation has
+booted and been confirmed; if space cannot accommodate migration, refuse it
+without destructive formatting. Recovery UI must boot independently of a
+valid user scene manifest or network connection.
+
+### Pending/confirmed boot protocol
+
+1. Begin: bind transaction to device ID, build ID, active revision, unique
+   request ID and signed/authenticated session. Check space, path policy,
+   quotas, and concurrency; return conflict if the active revision changed.
+2. Stage: bounded chunks into isolated immutable temporary objects; validate
+   offsets, per-file SHA-256, length, duplicate retries, and total quotas.
+3. Validate: parse JSON-with-comments using the actual firmware parser;
+   verify every scene/page/command reference, widget compatibility,
+   asset references, required settings and supported hardware targets.
+4. Commit: only after user confirmation, write the validated immutable
+   manifest, then persist a **pending** revision using redundant, checksummed
+   NVS selection records. Reboot by default.
+5. Boot: before rendering scenes, verify selected manifest and required
+   objects. Validate the UI-load path; treat boot crashes/watchdog failures
+   with a bounded boot-attempt policy, avoiding endless reboot loops.
+6. Confirm: only after local UI startup and stability checks, move the
+   previous active generation into the rollback slot. Home Assistant's
+   presence is not a health condition.
+7. Recover: if the pending generation fails locally, select the last
+   confirmed generation. If both are damaged, use the embedded/root recovery
+   configuration and display local recovery instructions.
+8. GC: remove orphan staging and unreferenced objects **only** when no
+   active, previous or pending manifest references them.
+
+Abort must never alter the active pointer. Rollback is a separate, confirmed,
+authenticated operation. Repeated commit requests must be idempotent and
+bounded by request ID and exact digest.
+
+## Pairing, secrets, and transport — not implemented
+
+Pairing approval must be explicitly confirmed on the touchscreen. The one-time
+code alone is not equivalent to encrypted authentication over plaintext HTTP.
+Evaluate at least:
+- TLS server + pinned device certificate and ephemeral challenge; and
+- a reviewed mutual-authenticated encrypted channel with SAS/PAKE-style
+  pairing (if available in the tested ESP-IDF build).
+
+Measure handshake heap/PSRAM usage, CPU time, connection impact on LVGL,
+and key storage/rotation. Require device-bound keys, nonce replay protection,
+failure rate limits and revocation. No bearer secrets in URLs, logs or query
+strings. No unauthenticated mutation endpoint, CORS bypass or fallback to
+plaintext if a secure session cannot be established.
+
+The user approved *eventual* deployment of credential-bearing files, but the
+HACS protocol v0.1.0-dev10 explicitly excludes them. Coordinate a separate
+HACS review to protect exported backups, redact diffs and logs, and require
+per-device explicit secret selection. Pairing secrets, private keys and Wi-Fi
+NVS credentials must **not** be included in reusable shared profiles. Moving
+Wi-Fi NVS credentials requires a distinct physically recoverable flow.
+Sensitive documents must never appear in the public v1 read surface.
+
+## UI responsiveness and network independence
+
+- Boot configuration and local UI without waiting for a network connection,
+  pairing, discovery, HA handshake, or a storage deployment session.
+- A network outage cannot cancel scenes, disable physical controls, or trigger
+  rollback. IR/BLE drivers and UI events must not call blocking deployment code.
+- Hashing, validation and file writes should run as low-priority, bounded work
+  with progress/checkpoints. Keep LVGL ownership on its UI thread; avoid long
+  `WebServer.handleClient` stalls, large contiguous allocations and flash
+  erases in the touch-critical path.
+- Prefer streaming JSON validation and file hashing; validate static references
+  off the UI path. Preserve image cache and touched widget lifetimes.
+- Benchmark tap latency, swipe latency, LVGL frame time, free heap and PSRAM
+  during idle, Wi-Fi offline, pairing, transfer, validation and commit.
+
+## Gate conditions before HACS can deploy
+
+1. v2 capabilities affirm authenticated transaction + rollback support and
+   positive limits; the preview explicitly does not.
+2. Device-bound secure session passes pairing, replay and revoked-peer tests.
+3. No unauthenticated filesystem or credentials leakage via HTTP/FTP/other
+   network services.
+4. Power removal at each stage/selection/boot/rollback point does not produce
+   mixed active configuration or destroy the last good generation.
+5. Reject nonexistent dependencies, malformed JSON-with-comments, unsupported
+   UI widgets, oversized assets, stale base hash, unexpected retries and lack
+   of flash space; return unambiguous status without partial activation.
+6. The hardware boots and operates without Wi-Fi, HA or microSD; recovery is
+   possible using serial `uploadfs` and the local recovery UI.
+7. The current config editor has an authenticated v2 migration or a deliberate
+   read-only compatibility mode; no hidden re-enabling of v1 mutation.
+8. Each device requires explicit approval for shared-profile deployment.
+9. Document and test BLE/IR offline behavior for the specific hardware adapter;
+   do not infer functionality from component presence alone.
+10. Obtain explicit review before merging into `waveshare28v2-port`.
+
+### Outstanding stages
+
+- [x] Dedicated development branch and locked-down v1 preview.
+- [x] Read-only negative-capabilities response.
+- [x] Pure path policy and initial host regression tests.
+- [ ] On-device compilation and network security inspection.
+- [ ] Config storage resolver and migration with immutable objects.
+- [ ] Redundant NVS boot records, generation selection and automatic recovery.
+- [ ] Transactional stage/validate/commit/rollback and crash simulation.
+- [ ] Secure pairing UI, encrypted channel and rate-limited authentication.
+- [ ] Sensitive-data management and HACS protocol changes.
+- [ ] Browser editor v2 migration.
+- [ ] Physical Waveshare power-cut and latency acceptance tests.
+- [ ] Explicit approval before merging.
