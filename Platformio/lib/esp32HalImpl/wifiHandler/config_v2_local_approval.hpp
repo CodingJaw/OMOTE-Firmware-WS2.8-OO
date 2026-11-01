@@ -1,7 +1,7 @@
 #pragma once
 
 // Firmware feature branch ONLY. Pure state machine for a mandatory *local*
-// physical-touch approval on EACH future deployment (and separately rollback).
+// physical-touch approval on EACH future configuration deployment.
 // This is NOT a pairing protocol, encrypted session or network handler.
 // No caller in this branch currently grants remote writes.
 //
@@ -22,7 +22,6 @@ struct Request {
   std::string transactionId;
   std::string proposedSha256;
   std::string expectedActiveSha256;
-  bool rollback = false;
 };
 
 inline bool sha256IsValid(const std::string &hash) {
@@ -55,8 +54,7 @@ inline bool sameRequest(const Request &a, const Request &b) {
   return a.deviceId == b.deviceId &&
          a.transactionId == b.transactionId &&
          a.proposedSha256 == b.proposedSha256 &&
-         a.expectedActiveSha256 == b.expectedActiveSha256 &&
-         a.rollback == b.rollback;
+         a.expectedActiveSha256 == b.expectedActiveSha256;
 }
 
 class Gate {
