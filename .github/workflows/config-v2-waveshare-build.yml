@@ -1,0 +1,40 @@
+name: Config v2 Waveshare compile
+
+on:
+  push:
+    branches: [feature/config-v2-transactional]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: config-v2-firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  waveshare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/packages
+            ~/.platformio/platforms
+            ~/.cache/pip
+          key: config-v2-pio-waveshare-${{ runner.os }}-v1
+      - name: ESP-IDF pip constraints
+        run: echo "PIP_CONSTRAINT=${{ github.workspace }}/Platformio/esp-idf-constraints.txt" >> "$GITHUB_ENV"
+      - name: Install PlatformIO
+        run: python -m pip install platformio
+      - name: Compile Waveshare OMOTE (no upload)
+        working-directory: Platformio
+        run: pio run -e waveshare28v2_omote
