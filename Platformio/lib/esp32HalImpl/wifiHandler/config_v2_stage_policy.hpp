@@ -1,7 +1,7 @@
 #pragma once
 
 // Pure checks for bounded, replay-safe staging. Not an authentication layer.
-#include "config_v2_generation_selection.hpp"
+#include "config_v2_digest.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -37,7 +37,7 @@ inline ChunkDecision classifyChunk(uint64_t written, uint64_t offset,
   return ChunkDecision::Reject; // Overlapping partial append is not idempotent.
 }
 
-// Must reserve flash for both confirmed generations AND staged data. This is
+// Must reserve capacity for the active snapshot AND staged data. This is
 // only an initial conservative space estimate, not a filesystem guarantee.
 inline bool hasCapacity(uint64_t total, uint64_t used,
                         uint64_t requiredNewBytes) {
