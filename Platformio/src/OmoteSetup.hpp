@@ -26,7 +26,7 @@ void showWaveshareStorageRecovery() {
 
   lv_obj_t *title = lv_label_create(screen);
   lv_obj_set_width(title, 220);
-  lv_label_set_text(title, "OMOTE: storage missing");
+  lv_label_set_text(title, "OMOTE: config recovery");
   lv_obj_set_style_text_color(title, lv_color_hex(0xffffff), 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 32);
 
@@ -34,13 +34,15 @@ void showWaveshareStorageRecovery() {
   lv_obj_set_width(instructions, 220);
   lv_label_set_long_mode(instructions, LV_LABEL_LONG_WRAP);
   lv_label_set_text(instructions,
-      "LittleFS not mounted or\n"
-      "Scenes.json is missing.\n\n"
+      "No usable configuration.\n"
+      "Local recovery mode active.\n\n"
       "Upload OMOTE's data folder\n"
       "with the matching target:\n"
       "waveshare28v2_omote\n"
       "uploadfs\n\n"
-      "Wi-Fi service remains active.");
+      "Network recovery support\n"
+      "is under development.\n"
+      "Remote writes disabled.");
   lv_obj_set_style_text_color(instructions, lv_color_hex(0xc7d7e7), 0);
   lv_obj_align(instructions, LV_ALIGN_TOP_MID, 0, 85);
 }
@@ -89,7 +91,7 @@ void setup() {
   auto &boardHardware =
       static_cast<WaveshareHardware &>(HardwareFactory::getAbstract());
   if (!boardHardware.sceneFilesystemReady()) {
-    Serial.println("[waveshare28v2] Missing scene filesystem; entering recovery UI (no reboot)");
+    Serial.println("[waveshare28v2] Missing or invalid config; entering recovery UI (no reboot)");
     showWaveshareStorageRecovery();
     lv_timer_handler();
     return;
