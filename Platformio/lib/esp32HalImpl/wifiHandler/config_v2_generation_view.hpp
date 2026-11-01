@@ -1,6 +1,6 @@
 #pragma once
 
-// A read-only, snapshot-pinned resolver for a single immutable generation.
+// A read-only, snapshot-pinned resolver for the single active configuration.
 // This does NOT activate the view on the Waveshare UI. Production must
 // replace every root-path reader (scene/page/command/image/settings) together,
 // never combining legacy-root and v2 files mid-scene.
