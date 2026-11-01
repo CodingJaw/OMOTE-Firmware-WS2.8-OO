@@ -11,6 +11,64 @@ comments. The older plan is retained as historical development context.
 The working `waveshare28v2-port` branch and HACS code have NOT changed.
 There is no authenticated upload/activation implementation yet.
 
+## Progress update — firmware development, 2026-11-01
+
+This development branch now has **read-only** runtime integration for
+single-active configuration selection. The previous bootstrap experience is
+unchanged while no `omotecfg/active` key exists in NVS.
+
+- `config_v2_single_active_runtime.{hpp,cpp}` reads the single active SHA
+  from NVS, verifies a canonical manifest plus all content-addressed
+  LittleFS objects and the scene registry, and exposes an immutable pinned
+  path resolver. Absent selector uses the existing legacy root; an explicitly
+  selected but damaged generation enters the firmware-owned recovery screen.
+  **This has not been exercised on physical hardware.**
+- The Waveshare initialization, scene registry, scene, page and command JSON
+  readers now use the selected resolver in this preview build. The old root
+  remains unmodified. The read-only v1 filesystem API reflects the same
+  selected public paths and will not disclose settings files in the tree.
+  `GET /api/config/v2/storage/status` also reports
+  `storage_model=single-active`, `config_mode`, `recovery_required`,
+  `recovery_reason`, and `active_revision_sha256`.
+- `config_v2_single_active_commit.{hpp,cpp}` contains **unconnected**
+  internal primitives to verify the entire graph, publish an immutable
+  canonical manifest, compare the persisted expected active revision, and
+  write one NVS pointer only after a matching one-shot local approval gate.
+  These primitives have **no network route, no working secure session,
+  no admin authorization integration and no live caller**. NVS interruption
+  behavior still requires physical tests.
+- The local approval policy now accepts an empty expected active SHA only for
+  the first migration from legacy root, and host tests cover this transition.
+- The firmware preview still **explicitly refuses all remote writes**,
+  advertises `transaction_support=false` and `rollback_support=false`,
+  and must not be used for a HACS deployment.
+
+**Remaining coverage blockers before activation:** image assets via LVGL,
+any filesystem readers for JSON devices/actions, settings and caches, safe
+network recovery/provisioning, authenticated encrypted pairing and the
+transaction API. Reading a single-active manifest in this experimental code
+does **not** prove that every runtime consumer is pinned to it.
+
+**Physical gate:** host and CI compilation results are not power-failure
+tests. Before allowing writes, verify partition layout of the private full
+flash backup, recovery/restore procedures, touch and scene functionality,
+crash/power-cut consistency, and that the independent recovery UI can
+reconnect for a secure HA resend.
+
+## Read-only inspection procedure (after deliberate controlled test flash)
+
+```bash
+# Replace with the actual trusted LAN IP address; no network writes:
+curl -fsS "http://$OMOTE_IP/api/config/v2/capabilities"
+curl -fsS "http://$OMOTE_IP/api/config/v2/storage/status"
+curl -fsS "http://$OMOTE_IP/api/fs/tree"
+```
+
+The status will normally say `config_mode=legacy` when no v2 active key
+exists; the presence of these endpoints is NOT deployment authorization.
+Never manually write the NVS `active` pointer or an incomplete manifest
+to test this without a proven physical recovery procedure.
+
 ## Scope retained
 
 - Firmware boots the touchscreen and **local recovery interface** without
