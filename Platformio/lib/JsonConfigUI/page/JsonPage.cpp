@@ -14,6 +14,9 @@
 #include "NumberPad.hpp"
 #include "magic_enum.hpp"
 #include "observerHandles.hpp"
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && !defined(IS_SIMULATOR)
+#include "config_v2_single_active_runtime.hpp"
+#endif
 #include <Arduino.h>
 #include <fstream>
 
@@ -48,14 +51,22 @@ std::string readEntityId(const rapidjson::Value &value) {
 std::filesystem::path resolvePageJsonPath(const std::string &fileName) {
   if (fileName.empty())
     return std::filesystem::path(FS_PATH);
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && !defined(IS_SIMULATOR)
+  const std::filesystem::path direct = config_v2_single_active_runtime::resolveVfsPath(fileName);
+#else
   const std::filesystem::path direct(FS_PATH + fileName);
+#endif
   {
     std::ifstream probe(direct);
     if (probe.good())
       return direct;
   }
   if (fileName.rfind("Pages/", 0) != 0) {
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && !defined(IS_SIMULATOR)
+    const std::filesystem::path underPages = config_v2_single_active_runtime::resolveVfsPath("Pages/" + fileName);
+#else
     const std::filesystem::path underPages(FS_PATH "Pages/" + fileName);
+#endif
     std::ifstream probe(underPages);
     if (probe.good())
       return underPages;
