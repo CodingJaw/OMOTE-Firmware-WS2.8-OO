@@ -142,6 +142,16 @@ std::string resolveVfsPath(const std::string &logicalPath) {
   return pinned.vfsPathFor(logicalPath, result) ? result : std::string();
 }
 
+std::string resolveLittleFsPath(const std::string &logicalPath) {
+  const auto vfs = resolveVfsPath(logicalPath);
+  return vfs.rfind("/littlefs/", 0) == 0 ? vfs.substr(9) : std::string();
+}
+
+std::vector<std::string> publicPaths() {
+  return current.mode == Mode::Active ? pinned.publicPaths()
+                                     : std::vector<std::string>{};
+}
+
 bool sceneReady() { return current.mode != Mode::Recovery; }
 
 } // namespace config_v2_single_active_runtime
