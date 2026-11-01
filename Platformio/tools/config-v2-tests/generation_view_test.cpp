@@ -17,6 +17,11 @@ int main() {
   Pinned pinned;
   assert(pinned.bind(a));
   assert(pinned.valid() && pinned.fileCount()==4);
+  const auto publicFiles = pinned.publicPaths();
+  assert(publicFiles.size() == 3);
+  assert(publicFiles[0] == "Commands/Roku.json");
+  assert(publicFiles[1] == "Scenes.json");
+  assert(publicFiles[2] == "Scenes/TV.json");
   assert(pinned.revision()==a.revision);
   std::string path;
   assert(pinned.vfsPathFor("Scenes.json", path));
@@ -41,6 +46,7 @@ int main() {
   a.revision="garbage";
   assert(!second.bind(a));
   assert(!second.valid());
+  assert(second.publicPaths().empty());
   assert(!second.vfsPathFor("Scenes.json",path));
   std::cout << "config v2 pinned generation view: PASS" << std::endl;
 }
