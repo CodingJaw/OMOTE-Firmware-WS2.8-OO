@@ -112,7 +112,17 @@ Status prepare(const std::vector<config_v2_manifest_index::Entry> &files,
 }
 
 Status activatePrepared(const Prepared &prepared,
-                        const std::string &expectedActive) {
+                        const std::string &expectedActive,
+                        config_v2_local_approval::Gate &physicalGate,
+                        const config_v2_local_approval::Request &request,
+                        std::uint32_t nowMs) {
+  // The future authenticated protocol must independently establish peer
+  // identity and HA-admin consent; this gate protects the storage boundary
+  // against commits lacking a matching, one-time local touchscreen approval.
+  if (!config_v2_local_approval::requestIsValid(request) ||
+      request.proposedSha256 != prepared.revision ||
+      request.expectedActiveSha256 != expectedActive)
+    return Status::PhysicalApprovalMissing;
   if (!config_v2_digest::valid(prepared.revision) ||
       (!expectedActive.empty() && !config_v2_digest::valid(expectedActive)))
     return Status::Invalid;
@@ -134,6 +144,10 @@ Status activatePrepared(const Prepared &prepared,
   if (current != expectedActive) {
     nvs.end();
     return Status::Conflict;
+  }
+  if (!physicalGate.consumeForAuthenticatedCommit(request, nowMs)) {
+    nvs.end();
+    return Status::PhysicalApprovalMissing;
   }
   // One pointer only. ESP NVS power-loss semantics and actual restore must
   // be hardware-qualified before secure service may invoke this method.
