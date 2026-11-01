@@ -187,9 +187,10 @@ void handleV2StorageStatus() {
   d.AddMember("generation_activation_enabled", false, a);
   const auto active = config_v2_single_active_runtime::snapshot();
   d.AddMember("storage_model", "single-active", a);
-  d.AddMember("config_mode",
-              active.mode == config_v2_single_active_runtime::Mode::Active ? "active" :
-              active.mode == config_v2_single_active_runtime::Mode::Recovery ? "recovery" : "legacy", a);
+  const char *modeName =
+      active.mode == config_v2_single_active_runtime::Mode::Active ? "active" :
+      active.mode == config_v2_single_active_runtime::Mode::Recovery ? "recovery" : "legacy";
+  d.AddMember("config_mode", jsonCopy(modeName, a), a);
   d.AddMember("recovery_required",
               active.mode == config_v2_single_active_runtime::Mode::Recovery, a);
   d.AddMember("recovery_reason", jsonCopy(active.reason, a), a);
