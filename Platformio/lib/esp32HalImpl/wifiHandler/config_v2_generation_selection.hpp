@@ -79,9 +79,26 @@ inline bool confirmUiHealthy(Selection &state, std::string_view bootedRevision) 
   return true;
 }
 
-inline void markLocalUiFailure(Selection &state) {
-  state.pending.clear();
+// Report a LOCAL boot/UI failure, not a missing network/HA acknowledgment.
+// Pending failures leave the confirmed generation unchanged. An already
+// confirmed generation that locally fails may fall back once to the previous
+// verified generation; otherwise the next boot uses the recovery UI.
+inline bool markLocalUiFailure(Selection &state, std::string_view failedRevision) {
+  if (!state.pending.empty() && failedRevision == state.pending) {
+    state.pending.clear();
+    state.trialBoots = 0;
+    return true;
+  }
+  if (failedRevision != state.active)
+    return false;
+  if (revisionIdValid(state.previous)) {
+    state.active = state.previous;
+    state.previous.clear();
+  } else {
+    state.active.clear();
+  }
   state.trialBoots = 0;
+  return true;
 }
 
 // Manual rollback is authenticated and confirmed at a higher layer.
