@@ -31,8 +31,7 @@ static std::map<std::string, std::string> sample() {
        {"Command":"TV_RED","Mode":"IR","Protocol":"NEC","Data":["0x12"]},
        {"Command":"TV_BLUE","Mode":"IR","Protocol":"NEC","Data":["0x13"]}
      ]})"},
-    {"Images/logo.png", std::string("\x89PNG\r\n", 6)},
-    {"HaSettings.json", R"({"Url":"http://local","Token":"secret-do-not-log"})"}
+    {"Images/logo.png", std::string("\x89PNG\r\n", 6)}
   };
 }
 
@@ -61,6 +60,11 @@ static config_v2_graph_validator::Result check(
 int main() {
   auto files = sample();
   assert(check(files).ok());
+  // A private settings file cannot be bundled into a portable graph,
+  // even when its JSON syntax and digest are valid.
+  files["HaSettings.json"] = R"({"Token":"secret-do-not-log"})";
+  assert(check(files).error == Error::InvalidIndex);
+  files = sample();
   files["Scenes/Scene_TV.json"] = R"({"Pages":[{"FileName":"Pages/Missing.json"}]})";
   assert(check(files).error == Error::MissingPage);
   files = sample();
