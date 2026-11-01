@@ -72,7 +72,12 @@ requirement to duplicate every file. Proposed layout:
 
 Two redundant NVS records select the active revision, previous confirmed
 revision, pending trial revision and monotonic record counter. Verify their
-checksums and referenced manifests before selecting a revision. Do **not**
+checksums and referenced manifests before selecting a revision. The initial
+pure state machine lives in `config_v2_generation_selection.hpp`, with tests
+in `tools/config-v2-tests/generation_selection_test.cpp`. It is deliberately
+not yet connected to persistent NVS or boot; callers will need to persist
+each state change before starting the selected UI. The state machine is a
+component, not a completed power-loss-safe A/B implementation. Do **not**
 assume NVS writes, FAT directory moves, or one-file rename make an entire
 JSON graph atomic. Never modify an object that belongs to an active manifest.
 
@@ -193,6 +198,8 @@ Sensitive documents must never appear in the public v1 read surface.
 - [x] Dedicated development branch and locked-down v1 preview.
 - [x] Read-only negative-capabilities response.
 - [x] Pure path policy and initial host regression tests.
+- [x] Standalone A/B trial selection logic and host tests (NOT integrated
+  with boot, NVS or LittleFS yet).
 - [ ] On-device compilation and network security inspection.
 - [ ] Config storage resolver and migration with immutable objects.
 - [ ] Redundant NVS boot records, generation selection and automatic recovery.
