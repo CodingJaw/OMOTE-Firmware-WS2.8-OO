@@ -37,11 +37,13 @@ int main() {
   assert(!publicReadable("Scenes/Scene_TV.json:stream"));
 
   assert(deployable("Scenes.json"));
-  assert(deployable("HaSettings.json"));
-  assert(deployable("DeviceSettings.json"));
-  assert(deployable("mqtt.json"));
-  assert(deployable("ftp.json"));
-  assert(deployable("ntp.json"));
+  // Private per-device configuration is never part of a portable manifest.
+  // It will require a separate encrypted, explicit opt-in protocol.
+  assert(!deployable("HaSettings.json"));
+  assert(!deployable("DeviceSettings.json"));
+  assert(!deployable("mqtt.json"));
+  assert(!deployable("ftp.json"));
+  assert(!deployable("ntp.json"));
   assert(!deployable("HaStateCache.json"));
   assert(!deployable("config-v2/active.json"));
   assert(!deployable("Scenes/../HaSettings.json"));
