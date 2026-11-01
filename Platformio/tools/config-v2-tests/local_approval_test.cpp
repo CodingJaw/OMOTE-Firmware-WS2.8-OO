@@ -15,6 +15,13 @@ static Request proposed() {
 int main() {
   const Request r = proposed();
   assert(requestIsValid(r));
+  Request firstDeployment = r;
+  firstDeployment.expectedActiveSha256.clear(); // Legacy root has no v2 pointer.
+  assert(requestIsValid(firstDeployment));
+  Gate legacyGate;
+  assert(legacyGate.offer(firstDeployment, 10, 1000));
+  assert(legacyGate.confirmLocalTouch(firstDeployment, 11));
+  assert(legacyGate.consumeForAuthenticatedCommit(firstDeployment, 12));
 
   Gate gate;
   assert(!gate.consumeForAuthenticatedCommit(r, 100));
