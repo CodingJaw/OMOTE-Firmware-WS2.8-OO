@@ -11,9 +11,14 @@ if [[ ! -x "$python" ]]; then
   echo "PlatformIO Python not found: $python" >&2
   exit 2
 fi
-if ! "$python" -m esptool --help >/dev/null 2>&1; then
+if ! esptool_help="$("$python" -m esptool --help 2>/dev/null)"; then
   echo "esptool module unavailable in $python; install it in the PlatformIO environment." >&2
   exit 2
+fi
+# esptool v5 documents 'read-flash'; earlier releases use 'read_flash'.
+flash_read_cmd="read_flash"
+if grep -q "read-flash" <<< "$esptool_help"; then
+  flash_read_cmd="read-flash"
 fi
 if [[ ! -e "$port" ]]; then
   echo "Serial device missing: $port" >&2
@@ -29,13 +34,13 @@ b="$dir/verification-second-read.bin"
 echo "Reading complete 16 MiB flash twice (NO WRITE/ERASE)."
 echo "Close PlatformIO serial monitor and any other programs using $port."
 "$python" -m esptool --chip esp32s3 --port "$port" --baud 460800 \
-  read_flash 0x0 0x1000000 "$a"
+  "$flash_read_cmd" 0x0 0x1000000 "$a"
 test "$(stat -c %s "$a")" -eq 16777216 || {
   echo "Wrong backup size; backup not verified." >&2
   exit 3
 }
 "$python" -m esptool --chip esp32s3 --port "$port" --baud 460800 \
-  read_flash 0x0 0x1000000 "$b"
+  "$flash_read_cmd" 0x0 0x1000000 "$b"
 test "$(stat -c %s "$b")" -eq 16777216 || {
   echo "Second read had wrong size; backup not verified." >&2
   exit 3
