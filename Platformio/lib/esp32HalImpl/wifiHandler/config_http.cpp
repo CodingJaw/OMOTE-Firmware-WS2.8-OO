@@ -86,14 +86,21 @@ size_t maxFsReadBytesForHeap() {
 }
 
 void sendCors() {
+#if !defined(OMOTE_CONFIG_V2_PREVIEW)
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.sendHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
   server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+#endif
+  // The preview build deliberately grants no cross-origin API permissions.
 }
 
 void sendJson(int code, const std::string &body) {
   noteRemoteConfigActivity();
   sendCors();
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+  server.sendHeader("Cache-Control", "no-store");
+  server.sendHeader("X-Content-Type-Options", "nosniff");
+#endif
   server.sendHeader("Connection", "close");
   server.send(code, "application/json", body.c_str());
 }
@@ -130,10 +137,54 @@ bool sendFsReadJson(const std::string &path, const std::string &content) {
 }
 
 bool isSafePath(const std::string &path) {
-  if (path.empty() || path[0] == '/' || path.find("..") != std::string::npos)
+  if (path.empty() || path[0] == '/' || path.find("..") != std::string::npos ||
+      path.find('\\') != std::string::npos)
     return false;
   return true;
 }
+
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+// v1 is a *public*, read-only discovery interface in this build.
+// Keep credentials and runtime settings private until authenticated v2 reads exist.
+bool isPublicConfigPath(const std::string &path) {
+  if (!isSafePath(path))
+    return false;
+  if (path == "Scenes.json" || path == "DeviceSettings.schema.json" ||
+      path == "logSettings.json")
+    return true;
+  if (path.size() < 5 || path.compare(path.size() - 5, 5, ".json") != 0)
+    return false;
+  static constexpr const char *prefixes[] = {
+      "Scenes/", "Pages/", "Commands/", "Devices/", "Actions/"};
+  for (const char *prefix : prefixes)
+    if (path.rfind(prefix, 0) == 0)
+      return true;
+  return false;
+}
+
+void handleV1MutationDisabled() {
+  sendJson(403, "{\"error\":\"legacy mutations disabled; authenticated config v2 required\"}");
+}
+
+void handleV2CapabilitiesPreview() {
+  // Deliberately fail closed. No pairing, upload, commit, or rollback API is
+  // advertised until the complete authenticated storage protocol is tested.
+  sendJson(200,
+      "{\"api_version\":\"omote-config-v2-preview\","
+      "\"auth_mode\":\"not-implemented\","
+      "\"device_id\":\"\","
+      "\"firmware_build\":\"waveshare28v2-config-v2-preview\","
+      "\"max_file_bytes\":0,"
+      "\"max_transaction_bytes\":0,"
+      "\"available_staging_bytes\":0,"
+      "\"active_revision_sha256\":\"\","
+      "\"previous_revision_sha256\":\"\","
+      "\"transaction_support\":false,"
+      "\"rollback_support\":false,"
+      "\"write_protection_enabled\":true,"
+      "\"legacy_http_writes_disabled\":true}");
+}
+#endif
 
 std::string vfsPath(const std::string &rel) {
   std::string base = FS_PATH;
@@ -196,30 +247,34 @@ void handleStatus() {
 void handleFsTree() {
   std::vector<std::string> files;
   collectFiles("/", files, "");
+  std::sort(files.begin(), files.end());
 
   rapidjson::Document d;
   d.SetObject();
   auto &a = d.GetAllocator();
   rapidjson::Value arr(rapidjson::kArrayType);
   for (const auto &f : files) {
-    if (f.find(".json") != std::string::npos || f.find("editor/") == 0)
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+    if (isPublicConfigPath(f))
       arr.PushBack(jsonCopy(f, a), a);
-  }
-  std::sort(files.begin(), files.end());
-  arr.Clear();
-  for (const auto &f : files) {
-    if (f.rfind("editor/", 0) == 0)
-      continue;
-    if (f.size() >= 5 && f.substr(f.size() - 5) == ".json")
+#else
+    if (f.rfind("editor/", 0) != 0 && f.size() >= 5 &&
+        f.substr(f.size() - 5) == ".json")
       arr.PushBack(jsonCopy(f, a), a);
+#endif
   }
   d.AddMember("files", arr, a);
   sendJson(200, OMOTE::JSON::ToString(d));
 }
 
 bool openFsPath(const std::string &path, File &out, size_t &outSize) {
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+  if (!isPublicConfigPath(path))
+    return false;
+#else
   if (!isSafePath(path))
     return false;
+#endif
   const std::string lfs = lfsPath(path);
   if (!LittleFS.exists(lfs.c_str()))
     return false;
@@ -345,6 +400,12 @@ void handleFsRead() {
     sendJson(400, "{\"error\":\"invalid path\"}");
     return;
   }
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+  if (!isPublicConfigPath(path)) {
+    sendJson(404, "{\"error\":\"not found\"}");
+    return;
+  }
+#endif
 
   const size_t maxRead = maxFsReadBytesForHeap();
   if (!maxRead) {
@@ -451,6 +512,10 @@ void handleDeviceSettingsSchemaGet() {
 
 void handleDeviceSettingsGet() {
   rapidjson::Document d = device_settings::toJsonDocument();
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+  d.RemoveMember("mqtt_password");
+  d.RemoveMember("ftp_password");
+#endif
   auto &a = d.GetAllocator();
   const auto &s = device_settings::currentConst();
   d.AddMember("sleep_timeout_ms", rapidjson::Value(static_cast<uint64_t>(s.displayTimeoutMs)), a);
@@ -589,6 +654,21 @@ void registerRoutes() {
   server.on("/api/fs/stat", HTTP_GET, handleFsStat);
   server.on("/api/fs/read/raw", HTTP_GET, handleFsReadRaw);
   server.on("/api/fs/read/chunk", HTTP_GET, handleFsReadChunk);
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+  server.on("/api/config/v2/capabilities", HTTP_GET, handleV2CapabilitiesPreview);
+  server.on("/api/fs/write", HTTP_POST, handleV1MutationDisabled);
+  server.on("/api/fs/write", HTTP_PUT, handleV1MutationDisabled);
+  server.on("/api/fs/delete", HTTP_POST, handleV1MutationDisabled);
+  server.on("/api/device/reboot", HTTP_POST, handleV1MutationDisabled);
+  server.on("/api/device/settings", HTTP_GET, handleDeviceSettingsGet);
+  server.on("/api/device/settings", HTTP_POST, handleV1MutationDisabled);
+  server.on("/api/device/settings/schema", HTTP_GET, handleDeviceSettingsSchemaGet);
+  server.on("/api/device/sync-mode", HTTP_GET, handleEditorSyncGet);
+  server.on("/api/device/sync-mode", HTTP_POST, handleV1MutationDisabled);
+  server.on("/api/ir/learn/start", HTTP_POST, handleV1MutationDisabled);
+  server.on("/api/ir/learn/stop", HTTP_POST, handleV1MutationDisabled);
+  server.on("/api/ir/learn/poll", HTTP_GET, handleIrLearnPoll);
+#else
   server.on("/api/fs/write", HTTP_POST, handleFsWrite);
   server.on("/api/fs/write", HTTP_PUT, handleFsWrite);
   server.on("/api/fs/delete", HTTP_POST, handleFsDelete);
@@ -601,6 +681,7 @@ void registerRoutes() {
   server.on("/api/ir/learn/start", HTTP_POST, handleIrLearnStart);
   server.on("/api/ir/learn/stop", HTTP_POST, handleIrLearnStop);
   server.on("/api/ir/learn/poll", HTTP_GET, handleIrLearnPoll);
+#endif
   server.on("/", HTTP_GET, handleRoot);
   server.onNotFound([]() { sendJson(404, "{\"error\":\"not found\"}"); });
   server.on("/api/status", HTTP_OPTIONS, handleOptions);
