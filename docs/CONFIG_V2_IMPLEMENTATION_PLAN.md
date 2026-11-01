@@ -136,6 +136,50 @@ NOT parse JSON, verify any file bytes or SHA-256 digest, resolve cross-file
 references, or decide that an actual configuration is safe to activate.
 Non-JSON assets require a separate explicit, validated policy.
 
+### Firmware-only validation and storage components (inert)
+
+The following are now source files on this branch. They **do not**
+implement the secure upload API, modify active config paths, or authorize
+any network mutation. They require CI build verification and on-device
+benchmarks before use in a live transaction:
+
+- `config_v2_sha256.hpp`: streaming SHA-256 with fixed working memory; host
+  vectors include empty input, "abc", 55-byte padding boundary and 1 million
+  bytes. Hashes are for integrity, not authentication.
+- `config_v2_stage_policy.hpp`: 1 KiB maximum chunk; 256 KiB initial per-file
+  limit; strict 128-bit device-generated transaction ID format; offset
+  conflict/idempotent retry detection and 128 KiB conservative free-space
+  reserve. A full transaction must also account for manifest size, namespace
+  metadata, flash wear, active/previous generations and temporary data.
+- `config_v2_littlefs_objects.hpp/.cpp`: optional verified staging under
+  `/omote-v2/staging/<tx>/<digest>.part` and immutable publication into
+  `/omote-v2/objects/<digest>`. It never truncates root active JSON or existing
+  objects. These functions are **not called** by HTTP handlers or boot.
+  `LittleFS.open("r+")`, flush and rename behavior needs actual hardware tests.
+- `config_v2_manifest_format.hpp`: strict canonical JSON manifest with
+  lexicographically ordered logical paths, explicit format version and
+  immutable SHA-256 revision over exact serialized bytes. Decoder checks
+  structural index limits. A committed manifest must be stored and verified
+  by the future generation transaction manager.
+- `config_v2_graph_validator.hpp`: checks content sizes and SHA-256 hashes
+  over exact bytes, JSON with comments using RapidJSON, scene registry,
+  referenced scene/page/command files, explicit command names/prefixes,
+  supported widget types and referenced image assets. It is currently a
+  **synchronous, in-memory helper**; production validation must be broken
+  into bounded work on a non-UI task, including streaming reads/hashes and
+  careful heap limits. It does not validate semantic IR protocol data,
+  hardware availability, or all optional device schema fields.
+
+Important: allowlisted `Images/*.png`, `*.jpg`, `*.jpeg` and `*.bmp`
+are valid configuration assets; non-JSON asset support must be reflected in
+HACS packages. Other file categories remain denied.
+
+Currently there are no authenticated v2 transaction handlers, touchscreen
+pairing, TLS provisioning, persistent manifest writer, pinned runtime resolver,
+or activation/rollback execution. `transaction_support` and
+`rollback_support` MUST stay false until all those pieces are implemented
+and hardware-tested.
+
 ### Pending/confirmed boot protocol
 
 1. Begin: bind transaction to device ID, build ID, active revision, unique
@@ -233,6 +277,12 @@ Sensitive documents must never appear in the public v1 read surface.
 - [x] Checksummed dual-slot boot selector encoding and read-only NVS inspection
   (boot and activation are not yet integrated).
 - [x] Preliminary bounded manifest-index validation and host regression tests.
+- [x] Portable streaming SHA-256 and known-answer tests.
+- [x] Canonical immutable manifest encoder/decoder.
+- [x] Firmware-only staging, chunk offset/idempotency rules and object-store
+  implementation (not wired to any network endpoint).
+- [x] JSON-with-comments graph integrity/reference validator and host tests
+  (not integrated into activation; hardware latency not yet measured).
 - [x] Read-only LittleFS capacity diagnostics; private v1 settings reads denied.
 - [ ] On-device compilation and network security inspection.
 - [ ] Config storage resolver and migration with immutable objects.
@@ -282,3 +332,30 @@ the local touchscreen UI and scene transitions still work. Compare free heap,
 tap and swipe latency before and after. This test does not verify future IR or
 BLE functions of the Waveshare port because those drivers still require
 separate implementation and/or verification.
+
+## HACS handoff boundary
+
+HACS `develop` currently supports read-only v1 status/inventory, draft editing,
+live drift review, and download-only backup/rollback ZIP. No change to HACS
+is needed to exercise these firmware-only components. The future HACS issue
+must cover:
+
+1. Treat `omote-config-v2-preview` as **not deployable** and require secure
+   capability negotiation with positive authentication/transaction/rollback
+   flags and per-device limits.
+2. Implement touchscreen-authorized encrypted pairing and securely persist
+   device-specific trust material in HA's private storage, not in profiles.
+3. Convert reviewed full manifest into canonical generation format and
+   upload immutable content using 1 KiB bounded idempotent chunks; support
+   explicit per-device consent, conflicts, retries, cancel and stale base
+   revision checks. Chunk/size values are development defaults, not yet
+   stable public firmware capability guarantees.
+4. Include image assets and credential-bearing documents only with
+   extra opt-in, export encryption/private storage and log redaction.
+   Currently HACS excludes these files, as required by its safety policy.
+5. Commit only after validation and user confirmation, then observe local
+   health/active SHA-256 and permit authenticated rollback.
+   Wi-Fi downtime must **not** trigger a firmware rollback.
+6. Migrate the browser editor away from v1 write APIs and CORS assumptions.
+7. Keep a kill switch. No actual writes until authenticated firmware v2
+   functionality and Waveshare physical power-loss tests pass.
