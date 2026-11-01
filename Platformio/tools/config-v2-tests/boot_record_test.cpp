@@ -1,5 +1,5 @@
 // Run from repository root:
-// c++ -std=c++17 -Wall -Wextra -Werror -o /tmp/omote-boot-record \
+// c++ -std=c++17 -Wall -Wextra -Werror -o /tmp/omote-boot-record
 //   Platformio/tools/config-v2-tests/boot_record_test.cpp && /tmp/omote-boot-record
 #include "../../lib/esp32HalImpl/wifiHandler/config_v2_boot_record.hpp"
 #include <cassert>
