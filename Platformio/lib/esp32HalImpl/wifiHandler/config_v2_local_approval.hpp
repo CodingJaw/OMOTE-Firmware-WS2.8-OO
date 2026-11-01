@@ -46,7 +46,8 @@ inline bool requestIsValid(const Request &req) {
   return !req.deviceId.empty() && req.deviceId.size() <= 128 &&
          transactionIsValid(req.transactionId) &&
          sha256IsValid(req.proposedSha256) &&
-         sha256IsValid(req.expectedActiveSha256) &&
+         (req.expectedActiveSha256.empty() ||
+          sha256IsValid(req.expectedActiveSha256)) &&
          req.proposedSha256 != req.expectedActiveSha256;
 }
 
