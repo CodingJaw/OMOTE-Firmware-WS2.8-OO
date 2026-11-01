@@ -13,6 +13,10 @@ int main() {
   assert(publicReadable("Commands/Commands_Roku.json"));
   assert(publicReadable("Devices/Roku.json"));
   assert(publicReadable("Actions/IRActionExample.json"));
+  assert(publicReadable("Images/OMOTE_Logo.png"));
+  assert(publicReadable("Images/splash.jpg"));
+  assert(!publicReadable("Images/exploit.js"));
+  assert(!publicReadable("Images/../../HaSettings.json"));
   assert(publicReadable("DeviceSettings.schema.json"));
   assert(!publicReadable("DeviceSettings.json"));
   assert(!publicReadable("HaSettings.json"));
