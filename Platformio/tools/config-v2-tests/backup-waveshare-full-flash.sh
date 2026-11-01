@@ -7,14 +7,36 @@ umask 077
 port="${1:-/dev/ttyACM0}"
 backup_root="${2:-$HOME/omote-backups}"
 python="${PYTHON:-$HOME/.platformio/penv/bin/python}"
+esptool_script="${ESPTOOL_PY:-$HOME/.platformio/packages/tool-esptoolpy/esptool.py}"
 if [[ ! -x "$python" ]]; then
-  echo "PlatformIO Python not found: $python" >&2
+  echo "Python executable not found: $python" >&2
+  echo "Set PYTHON to your available Python 3 interpreter, if needed." >&2
   exit 2
 fi
-if ! esptool_help="$("$python" -m esptool --help 2>/dev/null)"; then
-  echo "esptool module unavailable in $python; install it in the PlatformIO environment." >&2
+
+# PlatformIO commonly installs esptool as a standalone tool package, not
+# an importable Python module inside ~/.platformio/penv. Probe each candidate
+# using --help before reading the flash. Never install packages automatically.
+esptool_cmd=()
+esptool_help=""
+if [[ -f "$esptool_script" ]] &&
+   esptool_help="$("$python" "$esptool_script" --help 2>/dev/null)"; then
+  esptool_cmd=("$python" "$esptool_script")
+elif esptool_help="$("$python" -m esptool --help 2>/dev/null)"; then
+  esptool_cmd=("$python" -m esptool)
+elif command -v esptool >/dev/null 2>&1 &&
+     esptool_help="$(esptool --help 2>/dev/null)"; then
+  esptool_cmd=("$(command -v esptool)")
+elif command -v esptool.py >/dev/null 2>&1 &&
+     esptool_help="$(esptool.py --help 2>/dev/null)"; then
+  esptool_cmd=("$(command -v esptool.py)")
+else
+  echo "Cannot run esptool. Checked PlatformIO tool package, Python module, and PATH." >&2
+  echo "Look for $esptool_script or run:" >&2
+  echo "  $python -m pip install esptool" >&2
   exit 2
 fi
+echo "Using esptool: ${esptool_cmd[*]}"
 # esptool v5 documents 'read-flash'; earlier releases use 'read_flash'.
 flash_read_cmd="read_flash"
 if grep -q "read-flash" <<< "$esptool_help"; then
@@ -33,13 +55,13 @@ a="$dir/waveshare-esp32s3-16mb-full-flash.bin"
 b="$dir/verification-second-read.bin"
 echo "Reading complete 16 MiB flash twice (NO WRITE/ERASE)."
 echo "Close PlatformIO serial monitor and any other programs using $port."
-"$python" -m esptool --chip esp32s3 --port "$port" --baud 460800 \
+"${esptool_cmd[@]}" --chip esp32s3 --port "$port" --baud 460800 \
   "$flash_read_cmd" 0x0 0x1000000 "$a"
 test "$(stat -c %s "$a")" -eq 16777216 || {
   echo "Wrong backup size; backup not verified." >&2
   exit 3
 }
-"$python" -m esptool --chip esp32s3 --port "$port" --baud 460800 \
+"${esptool_cmd[@]}" --chip esp32s3 --port "$port" --baud 460800 \
   "$flash_read_cmd" 0x0 0x1000000 "$b"
 test "$(stat -c %s "$b")" -eq 16777216 || {
   echo "Second read had wrong size; backup not verified." >&2
