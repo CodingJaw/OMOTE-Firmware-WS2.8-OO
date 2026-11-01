@@ -35,14 +35,13 @@ void showWaveshareStorageRecovery() {
   lv_label_set_long_mode(instructions, LV_LABEL_LONG_WRAP);
   lv_label_set_text(instructions,
       "No usable configuration.\n"
-      "Local recovery mode active.\n\n"
-      "Upload OMOTE's data folder\n"
-      "with the matching target:\n"
-      "waveshare28v2_omote\n"
-      "uploadfs\n\n"
-      "Network recovery support\n"
-      "is under development.\n"
-      "Remote writes disabled.");
+      "Your existing files were\n"
+      "not erased.\n\n"
+      "Wi-Fi recovery is limited.\n"
+      "Remote writes are disabled.\n\n"
+      "Do NOT erase flash or run\n"
+      "uploadfs without a verified\n"
+      "recovery procedure.");
   lv_obj_set_style_text_color(instructions, lv_color_hex(0xc7d7e7), 0);
   lv_obj_align(instructions, LV_ALIGN_TOP_MID, 0, 85);
 }
