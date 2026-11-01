@@ -6,6 +6,9 @@
 #include "wifihandler.hpp"
 #include <Arduino.h>
 #include <LittleFS.h>
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+#include "config_v2_single_active_runtime.hpp"
+#endif
 #include <cstdarg>
 #include <cstdio>
 #include <vector>
@@ -114,11 +117,22 @@ void WaveshareHardware::init() {
   // different partitions, so its contents cannot be treated as OMOTE data.
   // Proceed to a recovery UI when the partition is absent or not provisioned.
   const bool mounted = LittleFS.begin(false);
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+  // Read-only boot selection; no network or local mutation is enabled.
+  config_v2_single_active_runtime::beginReadOnly(mounted);
+  sceneFilesystemReady_ = config_v2_single_active_runtime::sceneReady();
+#else
   sceneFilesystemReady_ = mounted && LittleFS.exists("/Scenes.json");
+#endif
   if (!mounted) {
     Serial.println("[waveshare28v2] LittleFS mount FAILED (no format attempted)");
   } else if (!sceneFilesystemReady_) {
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+    const auto config = config_v2_single_active_runtime::snapshot();
+    Serial.printf("[waveshare28v2] Config recovery: %s\n", config.reason.c_str());
+#else
     Serial.println("[waveshare28v2] LittleFS mounted but Scenes.json missing");
+#endif
   } else {
     Serial.println("[waveshare28v2] LittleFS mounted; Scenes.json found");
   }
