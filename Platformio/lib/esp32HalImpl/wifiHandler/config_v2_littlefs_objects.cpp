@@ -62,7 +62,7 @@ Status verifyPath(const std::string &path, const std::string &hash,
 bool inputValid(const std::string &tx, const std::string &hash,
                 uint64_t size) {
   return config_v2_stage_policy::transactionIdValid(tx) &&
-         config_v2_generation::revisionIdValid(hash) &&
+         config_v2_digest::valid(hash) &&
          size > 0 && size <= config_v2_stage_policy::kMaxStagedFileBytes;
 }
 } // namespace
@@ -150,7 +150,7 @@ Status complete(const std::string &transactionId, const std::string &hash,
 }
 
 Status verifyObject(const std::string &hash, uint64_t length) {
-  if (!config_v2_generation::revisionIdValid(hash) ||
+  if (!config_v2_digest::valid(hash) ||
       length == 0 || length > config_v2_stage_policy::kMaxStagedFileBytes)
     return Status::Invalid;
   return verifyPath(objectPath(hash), hash, length);
@@ -159,7 +159,7 @@ Status verifyObject(const std::string &hash, uint64_t length) {
 bool readObject(const std::string &hash, std::string &out,
                 uint64_t maximumBytes) {
   out.clear();
-  if (!config_v2_generation::revisionIdValid(hash) ||
+  if (!config_v2_digest::valid(hash) ||
       maximumBytes > config_v2_stage_policy::kMaxStagedFileBytes)
     return false;
   File f = LittleFS.open(objectPath(hash).c_str(), "r");
