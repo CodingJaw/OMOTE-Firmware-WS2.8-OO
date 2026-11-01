@@ -2,7 +2,7 @@
 
 // Inert until called by a future AUTHENTICATED v2 transaction service.
 // All writes are restricted to /omote-v2/staging/<id>/<hash>.part; existing
-// active, previous, and root LittleFS JSON paths are never truncated.
+// active and root LittleFS JSON paths are never truncated.
 #include <cstddef>
 #include <cstdint>
 #include <string>
