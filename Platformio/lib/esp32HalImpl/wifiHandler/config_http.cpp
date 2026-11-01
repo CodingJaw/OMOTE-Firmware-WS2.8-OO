@@ -10,6 +10,7 @@
 #include "editor_sync_mode.hpp"
 #if defined(OMOTE_CONFIG_V2_PREVIEW)
 #include "config_v2_path_policy.hpp"
+#include "config_v2_boot_nvs.hpp"
 #endif
 #include "ir/IRTransceiver.hpp"
 #include "LvglResourceManager.hpp"
@@ -161,6 +162,35 @@ void handleV1MutationDisabled() {
   sendJson(403, "{\"error\":\"legacy mutations disabled; authenticated config v2 required\"}");
 }
 
+void handlePrivateV1ReadDisabled() {
+  sendJson(403, "{\"error\":\"private settings require authenticated config v2\"}");
+}
+
+void handleV2StorageStatus() {
+  // Read-only diagnostics for capacity planning and NVS corruption testing.
+  // Does NOT stage, select or activate any generation.
+  const auto nvs = config_v2_boot_nvs::inspect();
+  const size_t total = LittleFS.totalBytes();
+  const size_t used = LittleFS.usedBytes();
+  rapidjson::Document d;
+  d.SetObject();
+  auto &a = d.GetAllocator();
+  d.AddMember("storage", "littlefs", a);
+  d.AddMember("total_bytes", static_cast<uint64_t>(total), a);
+  d.AddMember("used_bytes", static_cast<uint64_t>(used), a);
+  d.AddMember("estimated_free_bytes",
+              static_cast<uint64_t>(total >= used ? total - used : 0), a);
+  d.AddMember("nvs_readable", nvs.accessible, a);
+  d.AddMember("slot0_valid", nvs.slot0Valid, a);
+  d.AddMember("slot1_valid", nvs.slot1Valid, a);
+  d.AddMember("selector_initialized", nvs.chosen.valid, a);
+  d.AddMember("selector_sequence", nvs.chosen.valid
+                  ? static_cast<uint64_t>(nvs.chosen.snapshot.sequence)
+                  : static_cast<uint64_t>(0), a);
+  d.AddMember("generation_activation_enabled", false, a);
+  sendJson(200, OMOTE::JSON::ToString(d));
+}
+
 void handleV2CapabilitiesPreview() {
   // Deliberately fail closed. No pairing, upload, commit, or rollback API is
   // advertised until the complete authenticated storage protocol is tested.
@@ -206,7 +236,15 @@ void collectFiles(const char *dirPath, std::vector<std::string> &out, const std:
 
     std::string rel = prefix.empty() ? name : prefix + "/" + name;
     if (file.isDirectory()) {
+#if defined(OMOTE_CONFIG_V2_PREVIEW)
+      // Never walk internal immutable blob/staging directories on anonymous
+      // v1 listings; scanning thousands of files would stall the touch UI.
+      if (rel == "Scenes" || rel == "Pages" || rel == "Commands" ||
+          rel == "Devices" || rel == "Actions")
+        collectFiles(file.path(), out, rel);
+#else
       collectFiles(file.path(), out, rel);
+#endif
     } else {
       out.push_back(rel);
     }
@@ -651,11 +689,12 @@ void registerRoutes() {
   server.on("/api/fs/read/chunk", HTTP_GET, handleFsReadChunk);
 #if defined(OMOTE_CONFIG_V2_PREVIEW)
   server.on("/api/config/v2/capabilities", HTTP_GET, handleV2CapabilitiesPreview);
+  server.on("/api/config/v2/storage/status", HTTP_GET, handleV2StorageStatus);
   server.on("/api/fs/write", HTTP_POST, handleV1MutationDisabled);
   server.on("/api/fs/write", HTTP_PUT, handleV1MutationDisabled);
   server.on("/api/fs/delete", HTTP_POST, handleV1MutationDisabled);
   server.on("/api/device/reboot", HTTP_POST, handleV1MutationDisabled);
-  server.on("/api/device/settings", HTTP_GET, handleDeviceSettingsGet);
+  server.on("/api/device/settings", HTTP_GET, handlePrivateV1ReadDisabled);
   server.on("/api/device/settings", HTTP_POST, handleV1MutationDisabled);
   server.on("/api/device/settings/schema", HTTP_GET, handleDeviceSettingsSchemaGet);
   server.on("/api/device/sync-mode", HTTP_GET, handleEditorSyncGet);
