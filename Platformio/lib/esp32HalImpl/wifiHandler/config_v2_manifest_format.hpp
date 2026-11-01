@@ -22,6 +22,9 @@ struct Manifest {
   std::string revision;
 };
 
+inline bool encode(const std::vector<config_v2_manifest_index::Entry> &files,
+                   std::string &bytes, std::string &revision);
+
 inline bool decode(const std::string &bytes, Manifest &out) {
   if (bytes.empty() || bytes.size() > kMaxManifestBytes)
     return false;
@@ -48,11 +51,14 @@ inline bool decode(const std::string &bytes, Manifest &out) {
   }
   if (!config_v2_manifest_index::validate(entries).ok())
     return false;
-  config_v2_sha256::Hasher hash;
-  if (!hash.update(bytes))
+  // Require exact canonical bytes; reject duplicate/unknown JSON keys,
+  // noncanonical number/string escapes and trailing whitespace. Otherwise
+  // two manifests could describe the same graph but hash differently.
+  std::string canonical, revision;
+  if (!encode(entries, canonical, revision) || canonical != bytes)
     return false;
   out.files = std::move(entries);
-  out.revision = hash.hex();
+  out.revision = std::move(revision);
   return true;
 }
 
