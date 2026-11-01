@@ -4,7 +4,9 @@ on: [push]
 
 jobs:
   build-ubuntu:
-    runs-on: ubuntu-latest
+    # 2026 ubuntu-latest (26.04) does not provide the Python 3.9 toolchain
+    # requested below. Keep this legacy simulator on a compatible runner.
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v3
