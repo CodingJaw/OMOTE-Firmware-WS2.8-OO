@@ -55,7 +55,16 @@ int main() {
   assert(rollback(r));
   assert(r.active == b && r.previous == a);
   assert(beginTrial(r, c));
-  markLocalUiFailure(r);
+  assert(markLocalUiFailure(r, c));
   assert(r.pending.empty() && r.active == b && r.previous == a);
+
+  // A confirmed revision failing its local UI health check falls back to
+  // the previous confirmed revision, without involving Wi-Fi.
+  assert(markLocalUiFailure(r, b));
+  assert(r.active == a && r.previous.empty());
+  assert(markLocalUiFailure(r, a));
+  assert(r.active.empty());
+  assert(chooseBoot(r, validAll).source == BootSource::Recovery);
+  assert(!markLocalUiFailure(r, d));
   std::cout << "config v2 generation selection: PASS" << std::endl;
 }
