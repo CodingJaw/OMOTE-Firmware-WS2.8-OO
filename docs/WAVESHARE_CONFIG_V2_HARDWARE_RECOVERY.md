@@ -1,5 +1,11 @@
 # WAVESHARE Config v2 — backup and safe hardware acceptance
 
+> **Design update (November 1, 2026):** A/B configuration switching and
+> automatic rollback have been retired. Follow
+> [CONFIG_V2_SINGLE_ACTIVE_DESIGN.md](CONFIG_V2_SINGLE_ACTIVE_DESIGN.md)
+> for the current single-active design. The A/B-specific tests listed further
+> below are historical and must not be attempted.
+
 **Scope:** Only physical Waveshare ESP32-S3-Touch-LCD-2.8 V2, the existing
 16 MiB-flash configuration, and the experimental branch
 `feature/config-v2-transactional`. This procedure does not merge firmware,
@@ -96,13 +102,14 @@ and must keep `generation_activation_enabled=false`.
 ## Future destructive/fault-injection tests — BLOCKED until recovery is proven
 
 - Unplug USB while writing a *staged* inactive object, validate active JSON.
-- Unplug during manifest publication and boot selector update, then boot the
-  previously confirmed generation.
-- Force a malformed/missing scene dependency, verify local rollback.
-- Unplug during an authenticated commit, retry with the same request ID and
-  verify exact-once semantics.
+- Unplug during single active-manifest publication; verify either the old
+  intact active pointer or the new fully validated pointer is visible.
+- Force a malformed/missing scene dependency; verify the independent local
+  recovery UI and secure HA redeployment rather than automatic rollback.
+- Unplug during an authenticated commit, inspect status and safely retry with
+  the same request ID without unintentional duplicate activation.
 - Test too little LittleFS space, stale revision, invalid credentials, token
-  replay, and repeated boot resets.
+  replay, broken active scene and recovery-mode reconnect.
 - Measure touch latency and free heap throughout; Wi-Fi/HA outage alone must
   never cause rollback.
 
