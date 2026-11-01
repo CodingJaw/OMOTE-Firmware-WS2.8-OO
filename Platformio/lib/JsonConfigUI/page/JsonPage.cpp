@@ -652,6 +652,19 @@ void JsonPage::addButton(const std::string &aCommandPrefix, const rapidjson::Val
 void JsonPage::addImage(const rapidjson::Value &value) {
   if (value.HasMember("FileName") && value["FileName"].IsString()) {
     std::string file = value["FileName"].GetString();
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && !defined(IS_SIMULATOR)
+    // LVGL's Waveshare LittleFS driver is A: with root "/". An active
+    // snapshot must not silently render the image from legacy root JSON.
+    if (config_v2_single_active_runtime::snapshot().mode ==
+        config_v2_single_active_runtime::Mode::Active) {
+      const std::string lfs = config_v2_single_active_runtime::resolveLittleFsPath(file);
+      if (lfs.empty()) {
+        Serial.printf("JsonPage: active image is not in manifest\\n");
+        return;
+      }
+      file = "A:" + lfs;
+    }
+#endif
     auto image = std::make_unique<Widget::Image>(file.c_str());
     if (value.HasMember("SizeXYinPixels") && value["SizeXYinPixels"].IsArray())
       if (value["SizeXYinPixels"].Size() == 2 && value["SizeXYinPixels"][0].IsUint() && value["SizeXYinPixels"][1].IsUint())
