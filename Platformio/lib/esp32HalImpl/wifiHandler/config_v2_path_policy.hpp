@@ -64,17 +64,12 @@ inline bool publicReadable(std::string_view path) {
          imageAsset(path);
 }
 
-// A future authenticated v2 deployment MAY accept these paths, but only after
-// device-bound authentication, encrypted transport, preflight, and quotas.
-// Wi-Fi, BLE pairing and v2 private keys are stored in NVS and intentionally
-// excluded from shared configuration packages.
+// The portable single-active manifest is deliberately public-profile only.
+// Private per-device settings require a SEPARATE, authenticated and explicitly
+// opted-in protocol, which does not yet exist. Do not put credentials in
+// immutable content-addressed objects or share them with other remotes.
 inline bool deployable(std::string_view path) {
-  if (!safeRelative(path))
-    return false;
-  if (publicReadable(path))
-    return true;
-  return path == "DeviceSettings.json" || path == "HaSettings.json" ||
-         path == "mqtt.json" || path == "ntp.json" || path == "ftp.json";
+  return publicReadable(path);
 }
 
 inline bool containsSecrets(std::string_view path) {
