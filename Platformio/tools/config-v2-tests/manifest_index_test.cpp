@@ -15,19 +15,23 @@ int main() {
       {"Scenes/Scene_WatchTV.json", b, 480},
       {"Pages/Page_TV.json", b, 920},
       {"Commands/Commands_Roku.json", a, 240},
-      {"HaSettings.json", a, 120},
-      {"DeviceSettings.json", b, 420}};
+      {"Devices/Roku.json", a, 120},
+      {"Actions/IRActionExample.json", b, 420}};
   Result r = validate(files);
   assert(r.ok());
   assert(r.totalBytes == 2692);
-  assert(r.secretFiles == 2);
+  assert(r.secretFiles == 0);
 
-  files.push_back({"HaSettings.json", a, 120});
+  files.push_back({"Devices/Roku.json", a, 120});
   assert(validate(files).error == Error::DuplicatePath);
   files.pop_back();
-  files[4].path = "HaStateCache.json";
-  assert(validate(files).error == Error::ForbiddenPath);
-  files[4].path = "HaSettings.json";
+  for (const char *privatePath : {"HaSettings.json", "DeviceSettings.json",
+                                  "mqtt.json", "ntp.json", "ftp.json",
+                                  "HaStateCache.json"}) {
+    files[4].path = privatePath;
+    assert(validate(files).error == Error::ForbiddenPath);
+  }
+  files[4].path = "Devices/Roku.json";
   files[0].sha256 = "not-a-hash";
   assert(validate(files).error == Error::InvalidHash);
   files[0].sha256 = a;
