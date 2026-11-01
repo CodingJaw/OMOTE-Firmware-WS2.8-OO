@@ -1,3 +1,11 @@
+> **SUPERSEDED (November 1, 2026):** The user has cancelled A/B
+> configuration switching and automatic configuration rollback. This file is
+> retained for historical context. The CURRENT firmware design and handoff
+> requirements are in
+> [CONFIG_V2_SINGLE_ACTIVE_DESIGN.md](CONFIG_V2_SINGLE_ACTIVE_DESIGN.md).
+> Any A/B, previous-generation, boot-trial or rollback requirements below
+> MUST NOT be implemented.
+>
 # OMOTE config v2 — implementation plan (issue #1)
 
 Status: **development, incomplete, not deployable**. The user authorized implementation on this
