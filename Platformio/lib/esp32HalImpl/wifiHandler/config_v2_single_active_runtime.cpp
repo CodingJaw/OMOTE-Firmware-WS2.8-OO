@@ -3,6 +3,7 @@
 #include "config_v2_generation_view.hpp"
 #include "config_v2_littlefs_objects.hpp"
 #include "config_v2_manifest_format.hpp"
+#include "config_v2_graph_validator.hpp"
 #include "config_v2_sha256.hpp"
 #include "config_v2_path_policy.hpp"
 #include <Arduino.h>
@@ -118,9 +119,19 @@ void beginReadOnly(bool mounted) {
       return;
     }
   }
-  const auto object = pinned.find("Scenes.json");
-  if (!object || !validSceneRegistry(("/omote-v2/objects/" + object->sha256))) {
-    recovery("active-scenes-invalid");
+  // Do not select a manifest solely because its files hash correctly:
+  // valid JSON can still contain missing pages, commands or image references.
+  // Boot verification must fail closed rather than enter JsonUI with a
+  // partially usable configuration. This may take time on large profiles;
+  // performance and power-loss behavior still require hardware qualification.
+  auto load = [&](const std::string &path, std::string &content) {
+    const auto *object = pinned.find(path);
+    return object &&
+           config_v2_littlefs_objects::readObject(
+               object->sha256, content, object->length);
+  };
+  if (!config_v2_graph_validator::validate(manifest.files, load).ok()) {
+    recovery("active-graph-invalid");
     return;
   }
   current.mode = Mode::Active;
