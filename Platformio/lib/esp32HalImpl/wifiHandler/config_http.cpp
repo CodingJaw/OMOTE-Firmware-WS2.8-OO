@@ -240,7 +240,7 @@ void collectFiles(const char *dirPath, std::vector<std::string> &out, const std:
       // Never walk internal immutable blob/staging directories on anonymous
       // v1 listings; scanning thousands of files would stall the touch UI.
       if (rel == "Scenes" || rel == "Pages" || rel == "Commands" ||
-          rel == "Devices" || rel == "Actions")
+          rel == "Devices" || rel == "Actions" || rel == "Images")
         collectFiles(file.path(), out, rel);
 #else
       collectFiles(file.path(), out, rel);
