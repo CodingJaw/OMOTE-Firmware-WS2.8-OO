@@ -10,7 +10,6 @@
 #include "editor_sync_mode.hpp"
 #if defined(OMOTE_CONFIG_V2_PREVIEW)
 #include "config_v2_path_policy.hpp"
-#include "config_v2_boot_nvs.hpp"
 #endif
 #include "ir/IRTransceiver.hpp"
 #include "LvglResourceManager.hpp"
@@ -167,9 +166,8 @@ void handlePrivateV1ReadDisabled() {
 }
 
 void handleV2StorageStatus() {
-  // Read-only diagnostics for capacity planning and NVS corruption testing.
-  // Does NOT stage, select or activate any generation.
-  const auto nvs = config_v2_boot_nvs::inspect();
+  // Read-only diagnostics for capacity planning. A/B selector is retired.
+  // Legacy diagnostic fields remain false/zero until HACS v2 updates.
   const size_t total = LittleFS.totalBytes();
   const size_t used = LittleFS.usedBytes();
   rapidjson::Document d;
@@ -180,13 +178,11 @@ void handleV2StorageStatus() {
   d.AddMember("used_bytes", static_cast<uint64_t>(used), a);
   d.AddMember("estimated_free_bytes",
               static_cast<uint64_t>(total >= used ? total - used : 0), a);
-  d.AddMember("nvs_readable", nvs.accessible, a);
-  d.AddMember("slot0_valid", nvs.slot0Valid, a);
-  d.AddMember("slot1_valid", nvs.slot1Valid, a);
-  d.AddMember("selector_initialized", nvs.chosen.valid, a);
-  d.AddMember("selector_sequence", nvs.chosen.valid
-                  ? static_cast<uint64_t>(nvs.chosen.snapshot.sequence)
-                  : static_cast<uint64_t>(0), a);
+  d.AddMember("nvs_readable", false, a);
+  d.AddMember("slot0_valid", false, a);
+  d.AddMember("slot1_valid", false, a);
+  d.AddMember("selector_initialized", false, a);
+  d.AddMember("selector_sequence", static_cast<uint64_t>(0), a);
   d.AddMember("generation_activation_enabled", false, a);
   sendJson(200, OMOTE::JSON::ToString(d));
 }
