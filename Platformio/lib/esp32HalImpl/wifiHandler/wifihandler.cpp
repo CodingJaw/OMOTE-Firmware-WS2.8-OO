@@ -192,7 +192,11 @@ void wifiHandler::networkSync() {
 
   if (!editor_sync_mode::isActive()) {
     mqttSync();
+#if !defined(OMOTE_CONFIG_V2_PREVIEW)
+    // FTP provides a separate file-write path and must remain off until v2
+    // authentication, transactional storage, and recovery are implemented.
     ftpSync();
+#endif
     nptSync();
   }
   config_http::sync();
