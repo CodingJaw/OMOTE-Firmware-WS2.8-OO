@@ -11,6 +11,9 @@
 #include "SettingsPage.hpp"
 #include "editor_sync_mode.hpp"
 #include "device_settings.hpp"
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && !defined(IS_SIMULATOR)
+#include "config_v2_single_active_runtime.hpp"
+#endif
 #if !defined(IS_SIMULATOR) && !defined(OMOTE_WAVESHARE28V2)
 #include "display.hpp"
 #endif
@@ -22,6 +25,16 @@
 #include <fstream>
 
 using namespace UI::Screen;
+
+namespace {
+std::filesystem::path sceneConfigPath(const std::string &relative) {
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && !defined(IS_SIMULATOR)
+  return config_v2_single_active_runtime::resolveVfsPath(relative);
+#else
+  return FS_PATH + relative;
+#endif
+}
+} // namespace
 
 #define RTC_SIG 0x128934ab56cd78ef
 #define RTC_STR_SIZE 100
@@ -109,7 +122,7 @@ JsonHomeScreen::JsonHomeScreen(DeviceFactory &aFactory)
 }
 
 bool JsonHomeScreen::checkSceneForEntryExit(const std::string &aFileName) {
-  std::filesystem::path filePath(FS_PATH + aFileName);
+  std::filesystem::path filePath = sceneConfigPath(aFileName);
   rapidjson::Document d = OMOTE::JSON::GetDocument(filePath);
 
   if (d.HasParseError() || d.IsNull())
@@ -130,7 +143,7 @@ void JsonHomeScreen::clearScene() {
 }
 
 void JsonHomeScreen::displayScenePage(const std::string &aFileName, bool restoreScene) {
-  std::filesystem::path aFilePath(FS_PATH + aFileName);
+  std::filesystem::path aFilePath = sceneConfigPath(aFileName);
   rapidjson::Document d = OMOTE::JSON::GetDocument(aFilePath);
 
   if (d.HasParseError() || d.IsNull())
@@ -308,7 +321,7 @@ void JsonHomeScreen::sendExitSequence() {
 namespace {
 
 bool isSceneListedInManifest(const std::string &fileName) {
-  rapidjson::Document d = OMOTE::JSON::GetDocument(std::filesystem::path(FS_PATH "Scenes.json"));
+  rapidjson::Document d = OMOTE::JSON::GetDocument(sceneConfigPath("Scenes.json"));
   if (!d.HasMember("Scenes") || !d["Scenes"].IsArray())
     return false;
   for (rapidjson::SizeType i = 0; i < d["Scenes"].Size(); i++) {
@@ -326,7 +339,7 @@ void JsonHomeScreen::populateSceneListFromDisk() {
   mList->ClearItems();
   mSceneKeyHandlers.clear();
 
-  rapidjson::Document d = OMOTE::JSON::GetDocument(std::filesystem::path(FS_PATH "Scenes.json"));
+  rapidjson::Document d = OMOTE::JSON::GetDocument(sceneConfigPath("Scenes.json"));
   if (!d.HasMember("Scenes") || !d["Scenes"].IsArray())
     return;
 
@@ -367,7 +380,7 @@ void JsonHomeScreen::reloadCurrentSceneFromDisk() {
   }
 
   const std::string scene = mLastScene;
-  if (!std::filesystem::exists(std::filesystem::path(FS_PATH + scene)) ||
+  if (!std::filesystem::exists(sceneConfigPath(scene)) ||
       !isSceneListedInManifest(scene)) {
     std::fprintf(stderr, "[JsonHomeScreen] scene removed: %s\n", scene.c_str());
     std::fflush(stderr);
