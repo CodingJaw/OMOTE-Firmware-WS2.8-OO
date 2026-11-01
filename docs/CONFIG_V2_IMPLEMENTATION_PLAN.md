@@ -35,7 +35,8 @@ The `OMOTE_CONFIG_V2_PREVIEW` build flag is enabled only for
 - Keeps the v1 status and public, non-secret filesystem read endpoints.
 - Responds HTTP 403 to all registered v1 HTTP mutation routes
   (file write/delete, device settings, reboot, sync, IR learn start/stop).
-- Redacts MQTT and FTP passwords from `GET /api/device/settings`.
+- Returns HTTP 403 from `GET /api/device/settings`, because the remaining
+  fields can be private and cannot be safely redacted by a two-field list.
 - Restricts anonymous file reads and directory listings using the host-testable
   `config_v2_path_policy.hpp` allowlist; it blocks `HaSettings.json`,
   `DeviceSettings.json`, `mqtt.json`, `ftp.json`, state caches and internal paths.
@@ -44,6 +45,12 @@ The `OMOTE_CONFIG_V2_PREVIEW` build flag is enabled only for
 - Adds read-only `GET /api/config/v2/capabilities` returning
   `transaction_support=false`, `rollback_support=false`,
   `auth_mode=not-implemented`, and zero deployment limits.
+- Adds read-only `GET /api/config/v2/storage/status` showing raw LittleFS
+  total/used/estimated free bytes, validity of two redundant NVS selector slots,
+  and whether a selector has been initialized. No mutation or generation
+  activation occurs when this endpoint is called.
+- Anonymous file-tree listing skips staging/blob directories instead of walking
+  them and filtering afterwards. This avoids large scans in the touch UI.
 
 These controls **do not** constitute a secure v2 implementation; do not enable
 HACS deployment based on a version string. The stock browser editor's remote
@@ -104,6 +111,30 @@ existing root configuration untouched until a validated v2 generation has
 booted and been confirmed; if space cannot accommodate migration, refuse it
 without destructive formatting. Recovery UI must boot independently of a
 valid user scene manifest or network connection.
+
+### Persistent boot metadata — development implementation
+
+`config_v2_boot_record.hpp` encodes a versioned 216-byte selector with
+active, previous and pending SHA-256 revision identifiers, an increasing
+sequence counter, trial-boot count, and CRC-32. It rejects malformed/duplicate
+digest IDs, unsupported versions and impossible state combinations. A host
+regression test simulates incomplete writes and bit corruption, verifying the
+previous valid selector remains selectable.
+
+`config_v2_boot_nvs.cpp` adds an ESP32 Preferences adapter using two separate
+NVS entries under namespace `omotecfgv2`. The write path verifies the
+expected current slot/sequence, alternates to the other slot and reads back the
+result before reporting success. **It is not wired into boot or any HTTP write
+handler.** The read-only diagnostics endpoint is the only current consumer.
+
+The structural `config_v2_manifest_index.hpp` precheck allows up to 128
+configuration JSON files, each at most 256 KiB, totalling at most 2 MiB.
+These are **initial development limits, not advertised supported v2 deployment
+limits**. It requires `Scenes.json`, rejects duplicate/unsafe paths and
+invalid SHA-256 identifiers, and flags credential-bearing files. This DOES
+NOT parse JSON, verify any file bytes or SHA-256 digest, resolve cross-file
+references, or decide that an actual configuration is safe to activate.
+Non-JSON assets require a separate explicit, validated policy.
 
 ### Pending/confirmed boot protocol
 
@@ -198,8 +229,11 @@ Sensitive documents must never appear in the public v1 read surface.
 - [x] Dedicated development branch and locked-down v1 preview.
 - [x] Read-only negative-capabilities response.
 - [x] Pure path policy and initial host regression tests.
-- [x] Standalone A/B trial selection logic and host tests (NOT integrated
-  with boot, NVS or LittleFS yet).
+- [x] Standalone A/B trial selection logic and host tests.
+- [x] Checksummed dual-slot boot selector encoding and read-only NVS inspection
+  (boot and activation are not yet integrated).
+- [x] Preliminary bounded manifest-index validation and host regression tests.
+- [x] Read-only LittleFS capacity diagnostics; private v1 settings reads denied.
 - [ ] On-device compilation and network security inspection.
 - [ ] Config storage resolver and migration with immutable objects.
 - [ ] Redundant NVS boot records, generation selection and automatic recovery.
@@ -209,3 +243,42 @@ Sensitive documents must never appear in the public v1 read surface.
 - [ ] Browser editor v2 migration.
 - [ ] Physical Waveshare power-cut and latency acceptance tests.
 - [ ] Explicit approval before merging.
+
+## Stage 1 device test procedure (read-only)
+
+> The `waveshare28v2-port` branch remains unchanged. The Config v2 branch is
+> **not** a crash-safe deployer. This stage adds no authenticated upload or
+> generation switch. Do not invoke `uploadfs` for this test.
+
+```bash
+git fetch origin
+git switch feature/config-v2-transactional
+git pull --ff-only
+cd Platformio
+bash tools/config-v2-tests/run-host-tests.sh
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote -t upload \
+  --upload-port /dev/ttyACM0
+~/.platformio/penv/bin/platformio device monitor -p /dev/ttyACM0 -b 115200
+```
+
+In a second terminal, only while connected to the same trusted LAN, set
+`OMOTE_IP` to the actual device address and check:
+
+```bash
+curl -sS "http://$OMOTE_IP/api/config/v2/capabilities"
+curl -sS "http://$OMOTE_IP/api/config/v2/storage/status"
+curl -i "http://$OMOTE_IP/api/device/settings"    # expect HTTP 403
+curl -i -X POST "http://$OMOTE_IP/api/fs/delete?path=Scenes.json"  # HTTP 403
+```
+
+The status endpoint should report `generation_activation_enabled=false`.
+For a device that has never used the new v2 metadata namespace, expect
+`selector_initialized=false`. Read-only `Preferences.begin` can report
+`nvs_readable=false` for a missing namespace; it is not by itself a fault.
+
+Acceptance checks: unplug Wi-Fi/router or disable the access point and verify
+the local touchscreen UI and scene transitions still work. Compare free heap,
+tap and swipe latency before and after. This test does not verify future IR or
+BLE functions of the Waveshare port because those drivers still require
+separate implementation and/or verification.
