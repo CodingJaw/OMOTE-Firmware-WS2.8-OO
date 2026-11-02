@@ -168,3 +168,45 @@ budget limits online guessing. Refuse secure pairing when storage operations,
 cryptographic entropy, identity proofs or local confirmations cannot be
 verified. Avoid making any claim that encrypted pairing is available until
 end-to-end tests validate the firmware and HACS counterpart.
+
+
+## Device-side coordinator and local touchscreen preview — next increment
+
+The \`config_v2_pairing_coordinator.hpp\` template now combines the
+previously independent policy and persistent stores. Its caller MUST first
+supply a **cryptographically verified** encrypted provisional-session
+handle; a six-digit code alone is never sufficient. The coordinator
+requires a persisted attempt reservation before checking a code, binds
+the pending HA public-key fingerprint and encrypted session identifier,
+revalidates the same session on an actual touchscreen Approve gesture,
+and only then calls the trust-store replacement method. It does not
+have any HTTP endpoints, certificate/key generator or live cryptographic
+verifier. Host tests use an explicitly fake verifier to validate the
+orchestration, **not encryption strength**.
+
+The Waveshare Settings list now exposes **HA pairing (preview)** on the
+isolated feature branch. The local screen shows a six-digit temporary
+code, and offers **Cancel**. A verified pending peer would cause the UI
+to display all 64 hex characters of its SHA-256 public-key fingerprint
+and show physically clickable **Approve / Reject** buttons. The only
+current screen-owned window has **no secure session producer**, so it
+can never reach a verified-peer state and cannot persist trust. It
+continues to say **PREVIEW ONLY**. When an actual, reviewed PAKE
+implementation is selected, integrate the coordinator with a
+thread-safe UI dispatch and replace this preview-owned window with
+the validated coordinator-owned window before enabling network
+pairing. No remote API can currently open pairing, provide a
+\`VerifiedPeer\`, or invoke touchscreen approval.
+
+Espressif documents \`protocomm_security2\` as SRP6a + AES-GCM with a
+Python-based provisioning client available for evaluation. Confirm
+compatible security2 support, salt/verifier provisioning, session
+lifetime/replay handling, persistent lockout, per-device public-key
+pinning and memory use in this exact PlatformIO dual-framework build
+before implementing or claiming a working encrypted pairing channel.
+
+**Safety invariant:** \`auth_mode=not-implemented\`,
+\`transaction_support=false\`, \`write_protection_enabled=true\`.
+Firmware USB flashing, HA pairing and transaction tests must not begin
+until the secure backend and HACS counterpart have passed review and
+the Waveshare recovery plan is proven.

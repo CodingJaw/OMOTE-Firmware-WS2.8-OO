@@ -14,6 +14,9 @@
 #include "SystemSettings.hpp"
 #include "WifiSettings.hpp"
 #include "device_settings_schema.hpp"
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && defined(OMOTE_WAVESHARE28V2) && !defined(IS_SIMULATOR)
+#include "PairingPreviewPage.hpp"
+#endif
 
 #include <lvgl.h>
 
@@ -106,6 +109,13 @@ SettingsPage::SettingsPage()
   }
 
   mSettingsList->AddItem("Wifi", LV_SYMBOL_WIFI, [this] { PushWifiSettings(); }, SettingItemHeight);
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && defined(OMOTE_WAVESHARE28V2) && !defined(IS_SIMULATOR)
+  mSettingsList->AddItem("HA pairing (preview)", LV_SYMBOL_SETTINGS, [] {
+    UI::Screen::Manager::getInstance().pushPopUp(
+        std::make_unique<PairingPreviewPage>(
+            config_v2_pairing_policy::Entry::SettingsTouch));
+  }, SettingItemHeight);
+#endif
   mSettingsList->AddItem("Logging", LV_SYMBOL_LIST, [this] { PushLoggingSettings(); }, SettingItemHeight);
   mSettingsList->AddItem("Battery", LV_SYMBOL_BATTERY_3, [this] { PushLearnBattery(); }, mHeight);
   mSettingsList->AddItem("IR Receiver", LV_SYMBOL_EYE_OPEN, [this] { PushIrReader(); }, mHeight);

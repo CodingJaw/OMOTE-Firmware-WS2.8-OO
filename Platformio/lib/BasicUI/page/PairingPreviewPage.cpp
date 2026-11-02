@@ -1,40 +1,63 @@
 #if defined(OMOTE_CONFIG_V2_PREVIEW) && defined(OMOTE_WAVESHARE28V2) && !defined(IS_SIMULATOR)
 #include "PairingPreviewPage.hpp"
+#include "Button.hpp"
 #include "Label.hpp"
 #include <Arduino.h>
 #include <esp_system.h>
-#include <cstdio>
+#include <string>
 
 using namespace UI::Page;
 
 PairingPreviewPage::PairingPreviewPage(config_v2_pairing_policy::Entry entry)
     : Base(ID::Pages::Settings) {
-  // The code is strictly local, random and short-lived; no API accepts it yet.
-  // Pairing must remain unavailable until a trusted encrypted provisional
-  // channel and verified peer public key are implemented and tested.
+  // LOCAL-ONLY preview. No socket, REST, MQTT or BLE endpoint can supply a
+  // VerifiedPeer, so the Approve action cannot currently grant trust.
   const auto started = pairing_.begin(entry, millis(), []() -> uint32_t {
     return esp_random();
   });
 
-  auto *heading = AddNewElement<UI::Widget::Label>(
-      "LOCAL PREVIEW ONLY");
-  heading->SetWidth(205);
-  heading->AlignTo(this, LV_ALIGN_TOP_MID, 0, 12);
+  auto *heading = AddNewElement<UI::Widget::Label>("HA PAIRING - PREVIEW ONLY");
+  heading->SetWidth(208);
+  heading->SetHeight(20);
+  heading->AlignTo(this, LV_ALIGN_TOP_MID, 0, 8);
 
   code_ = AddNewElement<UI::Widget::Label>(
       started == config_v2_pairing_policy::Status::Ok
           ? pairing_.codeForLocalScreen(millis()) : "Unavailable");
-  code_->SetWidth(205);
-  code_->AlignTo(heading, LV_ALIGN_OUT_BOTTOM_MID, 0, 18);
+  code_->SetWidth(208);
+  code_->SetHeight(32);
+  code_->AlignTo(heading, LV_ALIGN_OUT_BOTTOM_MID, 0, 6);
+
+  fingerprint_ = AddNewElement<UI::Widget::Label>("");
+  fingerprint_->SetWidth(208);
+  fingerprint_->SetHeight(72);
+  fingerprint_->AlignTo(code_, LV_ALIGN_OUT_BOTTOM_MID, 0, 6);
+  lv_label_set_long_mode(fingerprint_->LvglSelf(), LV_LABEL_LONG_WRAP);
 
   status_ = AddNewElement<UI::Widget::Label>(
       "This code cannot pair with HA yet.\n"
-      "Secure encrypted pairing and\n"
-      "touch confirmation are not active.\n"
-      "Remote writes remain disabled.");
-  status_->SetWidth(205);
-  status_->AlignTo(code_, LV_ALIGN_OUT_BOTTOM_MID, 0, 18);
+      "Secure session and HA identity\n"
+      "verification are not connected.\n"
+      "Device writes are disabled.");
+  status_->SetWidth(208);
+  status_->SetHeight(72);
+  status_->AlignTo(fingerprint_, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
   lv_label_set_long_mode(status_->LvglSelf(), LV_LABEL_LONG_WRAP);
+
+  // Both callbacks originate ONLY from physical LVGL button gestures.
+  // The policy additionally refuses to approve without a secure peer.
+  approve_ = AddNewElement<UI::Widget::Button>(
+      [this] { approveFromTouch(); });
+  approve_->SetText("Approve");
+  approve_->SetSize(97, 34);
+  approve_->AlignTo(this, LV_ALIGN_BOTTOM_LEFT, 6, -6);
+  lv_obj_add_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+
+  reject_ = AddNewElement<UI::Widget::Button>(
+      [this] { rejectFromTouch(); });
+  reject_->SetText("Cancel");
+  reject_->SetSize(97, 34);
+  reject_->AlignTo(this, LV_ALIGN_BOTTOM_RIGHT, -6, -6);
 
   timer_ = lv_timer_create(timerTick, 500, this);
 }
@@ -49,15 +72,63 @@ PairingPreviewPage::~PairingPreviewPage() {
 
 void PairingPreviewPage::timerTick(lv_timer_t *timer) {
   auto *self = static_cast<PairingPreviewPage *>(lv_timer_get_user_data(timer));
-  if (self)
-    self->refresh();
+  if (self) self->refresh();
+}
+
+void PairingPreviewPage::approveFromTouch() {
+  // Future secure PAKE work must bind this page to a trusted coordinator;
+  // this preview Window has no network entry point and cannot store trust.
+  const auto now = millis();
+  if (!pairing_.peerForLocalScreen(now) ||
+      pairing_.confirmTouch(now) != config_v2_pairing_policy::Status::Ok) {
+    if (status_) status_->SetText("No verified peer. Pairing unavailable.");
+    return;
+  }
+  // Even a local approval is NOT durable pairing until the coordinator has
+  // revalidated the secure session and persisted the approved fingerprint.
+  if (status_) status_->SetText(
+      "Local touch confirmed.\n"
+      "Trust is NOT stored.\n"
+      "Encrypted pairing unavailable.");
+  refresh();
+}
+
+void PairingPreviewPage::rejectFromTouch() {
+  pairing_.cancel();
+  cancelled_ = true;
+  if (code_) code_->SetText("Cancelled");
+  if (status_) status_->SetText("Pairing preview cancelled.\nNo settings changed.");
+  if (fingerprint_) fingerprint_->SetText("");
+  if (approve_) lv_obj_add_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+  if (reject_) reject_->SetText("Closed");
 }
 
 void PairingPreviewPage::refresh() {
-  if (pairing_.phase(millis()) == config_v2_pairing_policy::Phase::Idle) {
-    if (code_)
-      code_->SetText("Expired");
+  const auto now = millis();
+  const auto phase = pairing_.phase(now);
+  if (phase == config_v2_pairing_policy::Phase::AwaitingTouch) {
+    const auto *peer = pairing_.peerForLocalScreen(now);
+    if (!peer) return;
+    // Show the FULL verified peer fingerprint so the operator can compare
+    // identity. The transport must authenticate this fingerprint first.
+    const std::string &fp = peer->publicKeyFingerprint;
+    const std::string readable = "HA peer SHA-256:\n" +
+        fp.substr(0, 16) + "\n" + fp.substr(16, 16) + "\n" +
+        fp.substr(32, 16) + "\n" + fp.substr(48, 16);
+    if (fingerprint_) fingerprint_->SetText(readable);
+    if (code_) code_->SetText("Peer authenticated");
+    if (status_) status_->SetText(
+        "Compare HA identity. This preview\n"
+        "cannot store pairing trust.");
+    if (approve_) lv_obj_remove_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+    if (reject_) reject_->SetText("Reject");
+  } else {
+    if (approve_) lv_obj_add_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+    if (phase == config_v2_pairing_policy::Phase::Idle && !cancelled_) {
+      if (code_) code_->SetText("Expired");
+      if (status_) status_->SetText(
+          "Pairing preview expired.\nNo settings changed.");
+    }
   }
 }
-
-#endif // Waveshare 2.8 V2 Config v2 local preview
+#endif // Waveshare 2.8 V2 local-only pairing preview
