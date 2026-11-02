@@ -89,6 +89,14 @@ exists; the presence of these endpoints is NOT deployment authorization.
 Never manually write the NVS `active` pointer or an incomplete manifest
 to test this without a proven physical recovery procedure.
 
+## Secure transaction contract
+
+The proposed mutually authenticated, locally approved upload protocol,
+security trust boundaries, stable error codes and recovery gates are specified
+in [CONFIG_V2_TRANSACTION_SECURITY_CONTRACT.md](CONFIG_V2_TRANSACTION_SECURITY_CONTRACT.md).
+It is a **draft contract**: secure pairing, transport and HTTP mutation routes
+are not connected, and transaction support remains disabled.
+
 ## Scope retained
 
 - Firmware boots the touchscreen and **local recovery interface** without
