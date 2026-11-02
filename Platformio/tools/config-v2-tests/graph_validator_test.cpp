@@ -31,7 +31,8 @@ static std::map<std::string, std::string> sample() {
        {"Command":"TV_RED","Mode":"IR","Protocol":"NEC","Data":["0x12"]},
        {"Command":"TV_BLUE","Mode":"IR","Protocol":"NEC","Data":["0x13"]}
      ]})"},
-    {"Images/logo.png", std::string("\x89PNG\r\n", 6)}
+    {"Images/logo.png", std::string("\x89PNG\r\n", 6)},
+    {"Devices/Roku.json", R"({"name":"Roku","keys":{"Back":{"Press":{"type":"IRAction","name":"RokuBack","data":{"protocol":"NEC","data":"0x57436699"}}}}})"}
   };
 }
 
@@ -64,6 +65,21 @@ int main() {
   // even when its JSON syntax and digest are valid.
   files["HaSettings.json"] = R"({"Token":"secret-do-not-log"})";
   assert(check(files).error == Error::InvalidIndex);
+  files = sample();
+  files["Devices/Roku.json"] = R"({"keys":{}})";
+  assert(check(files).error == Error::InvalidStructure);
+  files = sample();
+  files["Devices/Roku.json"] = R"({"name":4,"keys":{}})";
+  assert(check(files).error == Error::InvalidStructure);
+  files = sample();
+  files["Devices/Roku.json"] = R"({"name":"Roku","keys":[]})";
+  assert(check(files).error == Error::InvalidStructure);
+  files = sample();
+  files["Devices/Roku.json"] = R"({"name":"Roku","keys":{"Back":[]}})";
+  assert(check(files).error == Error::InvalidStructure);
+  files = sample();
+  files["Devices/Roku.json"] = R"({"name":"Roku","keys":{"Back":{"Press":"IRAction"}}})";
+  assert(check(files).error == Error::InvalidStructure);
   files = sample();
   files["Scenes/Scene_TV.json"] = R"({"Pages":[{"FileName":"Pages/Missing.json"}]})";
   assert(check(files).error == Error::MissingPage);
