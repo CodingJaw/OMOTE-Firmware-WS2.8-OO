@@ -47,6 +47,20 @@ bool verifyAll(const std::vector<config_v2_manifest_index::Entry> &files) {
       return false;
   return true;
 }
+// A Prepared value is a plain C++ struct, not an authorization token.
+// Never allow a caller to bypass graph validation by fabricating one and
+// pointing it at a well-formed manifest with individually valid objects.
+bool verifyGraph(const std::vector<config_v2_manifest_index::Entry> &files) {
+  auto load = [&](const std::string &path, std::string &content) {
+    const auto it = std::find_if(files.begin(), files.end(), [&](const auto &e) {
+      return e.path == path;
+    });
+    return it != files.end() &&
+           config_v2_littlefs_objects::readObject(
+               it->sha256, content, it->length);
+  };
+  return config_v2_graph_validator::validate(files, load).ok();
+}
 } // namespace
 
 Status prepare(const std::vector<config_v2_manifest_index::Entry> &files,
@@ -58,17 +72,8 @@ Status prepare(const std::vector<config_v2_manifest_index::Entry> &files,
   if (!verifyAll(files))
     return Status::MissingObject;
 
-  // The graph validator also checks exact bytes, JSONC, dependencies,
-  // widget/image references. Run on a *non-UI* task when integrated.
-  auto load = [&](const std::string &path, std::string &content) {
-    const auto it = std::find_if(files.begin(), files.end(), [&](const auto &e) {
-      return e.path == path;
-    });
-    return it != files.end() &&
-           config_v2_littlefs_objects::readObject(
-               it->sha256, content, it->length);
-  };
-  if (!config_v2_graph_validator::validate(files, load).ok())
+  // Run on a non-LVGL task once the authenticated service is built.
+  if (!verifyGraph(files))
     return Status::GraphInvalid;
   const auto path = manifestPath(revision);
   if (LittleFS.exists(path.c_str())) {
@@ -131,8 +136,12 @@ Status activatePrepared(const Prepared &prepared,
     return Status::CorruptManifest;
   config_v2_manifest_format::Manifest manifest;
   if (!config_v2_manifest_format::decode(bytes, manifest) ||
-      manifest.files.size() != prepared.files || !verifyAll(manifest.files))
+      manifest.files.size() != prepared.files)
+    return Status::CorruptManifest;
+  if (!verifyAll(manifest.files))
     return Status::MissingObject;
+  if (!verifyGraph(manifest.files))
+    return Status::GraphInvalid;
 
   Preferences nvs;
   if (!nvs.begin("omotecfg", false))
