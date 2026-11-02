@@ -30,5 +30,7 @@ jobs:
         run: bash -n Platformio/tools/config-v2-tests/backup-waveshare-full-flash.sh
       - name: Compile and run isolated storage tests
         run: bash Platformio/tools/config-v2-tests/run-host-tests.sh
+      - name: Run firmware-owned preview API contract regressions
+        run: python3 -m unittest discover -s Platformio/tools/config-v2-tests -p 'test_preview_contract.py' -v
       - name: Inspect synthetic flash backups without hardware access
         run: python3 -m unittest discover -s Platformio/tools/config-v2-tests -p 'test_*.py' -v
