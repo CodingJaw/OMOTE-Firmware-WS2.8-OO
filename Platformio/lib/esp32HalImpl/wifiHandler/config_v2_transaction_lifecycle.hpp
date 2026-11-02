@@ -104,19 +104,31 @@ public:
     return Status::Ok;
   }
 
-  // Recheck the local gate and the exact authenticated request. A success
-  // provides only a single-use sequencing grant to a *trusted* manager.
-  // It is NOT cryptographic authorization and does NOT activate NVS.
-  Status consumeLocalApproval(const AuthenticatedOffer &offer,
-                              config_v2_local_approval::Gate &gate,
-                              std::uint32_t now) {
+  // Check the exact authenticated request and whether a local touch happened.
+  // Do NOT consume the Gate here: activatePrepared() must consume it itself
+  // while holding the persisted active-revision compare-and-swap boundary.
+  Status readyToCommit(const AuthenticatedOffer &offer,
+                       config_v2_local_approval::Gate &gate,
+                       std::uint32_t now) {
     const Status state = check(offer, now);
     if (state != Status::Ok)
       return state;
     if (phase_ != Phase::WaitingForTouch)
       return Status::WrongPhase;
-    if (!gate.consumeForAuthenticatedCommit(offer_.request, now))
+    if (!gate.locallyApproved(now))
       return Status::PhysicalApprovalMissing;
+    phase_ = Phase::ReadyToCommit;
+    return Status::Ok;
+  }
+
+  // The trusted manager calls this ONLY after activatePrepared() returned
+  // success. It records completion without granting any further approvals.
+  Status committed(const AuthenticatedOffer &offer, std::uint32_t now) {
+    const Status state = check(offer, now);
+    if (state != Status::Ok)
+      return state;
+    if (phase_ != Phase::ReadyToCommit)
+      return Status::WrongPhase;
     phase_ = Phase::Consumed;
     return Status::Ok;
   }
