@@ -4,7 +4,7 @@ cd "$(dirname "$0")/../../.."
 compiler="${CXX:-c++}"
 output_dir="$(mktemp -d)"
 trap 'rm -rf "$output_dir"' EXIT
-for name in path_policy manifest_index sha256 graph_validator stage_policy manifest_format local_approval generation_view transaction_lifecycle logical_paths pairing_policy pairing_entry; do
+for name in path_policy manifest_index sha256 graph_validator stage_policy manifest_format local_approval generation_view transaction_lifecycle logical_paths pairing_policy pairing_entry pairing_attempt_budget pairing_trust_record; do
   echo "[config-v2] compiling $name"
   "$compiler" -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
     -o "$output_dir/$name" \

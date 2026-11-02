@@ -111,3 +111,60 @@ The in-memory policy is **not** sufficient production protection.
 
 The current local preview must never claim a successful pairing or
 enable deployment. Issue #1 remains open.
+
+
+## Isolated persistent pairing security groundwork (feature branch)
+
+The experimental firmware now includes an **NVS-backed enrollment attempt
+budget** and a **versioned, single-HA public-key fingerprint pin**. Both are
+low-level building blocks; neither can authenticate Home Assistant without
+a reviewed PAKE implementation and genuine touchscreen confirmation.
+
+- \`config_v2_pairing_attempt_budget.hpp\` specifies five **persisted,
+  pre-verification** PIN attempts. The counter is atomically reserved before
+  checking a candidate code. Once exhausted, a restart does not reset it.
+  Only a physical touchscreen rearm after at least 120 seconds, or a verified
+  + physically approved pairing **after durable trust storage**, can clear
+  the counter. No remote endpoint can call the reset. The pure host test
+  covers reboot, simulated concurrent callers sharing a store, NVS failure
+  and \`millis()\` wraparound.
+- \`config_v2_pairing_attempt_nvs.cpp\` implements the atomic, mutex-guarded
+  read-increment-persist-readback using \`Preferences\` under the separate
+  \`omotepair/attempts\` key. Storage failure means **no PIN comparison**.
+  A production pairing coordinator must call this store on **every** PIN
+  candidate before \`Window::submitVerifiedPeerCode\`. The preview has no
+  network pairing candidate handler, so no such caller exists today.
+- \`config_v2_pairing_trust_record.hpp\` strictly encodes a single
+  lower-case 64-character SHA-256 fingerprint, prefixed with a format
+  version; rejects malformed/corrupt records.
+- \`config_v2_pairing_trust_nvs.cpp\` reads and performs a single-key,
+  read-back-verified replacement of \`omotepair/haPeer\`. It never touches
+  \`omotecfg/active\`, LittleFS scene data, Wi-Fi credentials or the
+  firmware partition. Existing valid trust is not deliberately removed
+  before replacement. The **caller must first prove** the session's
+  cryptographic peer identity and consume a real touchscreen approval;
+  the storage method cannot perform or infer these checks itself.
+- All code is on \`feature/config-v2-transactional\` only. Host tests
+  are wired into \`run-host-tests.sh\`. Hardware NVS behavior is **not**
+  certified by these host tests.
+
+**Still required:** a reviewed encrypted PAKE supported by ESP-IDF and HACS,
+device key provisioning, candidate transport/session binding, authenticated
+HA peer identity presentation, actual Approve/Reject touchscreen callbacks,
+coordinator integration, credential revocation, failure injection and
+real-Waveshare tests. Neither the six-digit PIN state machine, the NVS
+attempt gate, nor a stored fingerprint is proof of secure pairing in
+isolation. Wi-Fi/HTTP status and deployment capabilities remain unchanged:
+\`auth_mode=not-implemented\`, \`transaction_support=false\`,
+\`write_protection_enabled=true\`.
+
+### Security limits
+
+A physical attacker with flash/NVS write access may reset the attempt
+counter or substitute a pinned key unless secure boot, flash encryption and
+NVS key protection are reviewed and enabled. A six-digit PIN is low entropy:
+the PAKE must hide the code from passive observers while the persistent
+budget limits online guessing. Refuse secure pairing when storage operations,
+cryptographic entropy, identity proofs or local confirmations cannot be
+verified. Avoid making any claim that encrypted pairing is available until
+end-to-end tests validate the firmware and HACS counterpart.
