@@ -11,6 +11,9 @@
 #include "ScreenBase.hpp"
 #include "StatusBar.hpp"
 #include "TabView.hpp"
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && defined(OMOTE_WAVESHARE28V2) && !defined(IS_SIMULATOR)
+#include "config_v2_pairing_entry.hpp"
+#endif
 
 namespace UI::Screen {
 
@@ -57,6 +60,9 @@ protected:
   void populateSceneListFromDisk();
 
 private:
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && defined(OMOTE_WAVESHARE28V2) && !defined(IS_SIMULATOR)
+  config_v2_pairing_entry::PhysicalChord mPairingChord;
+#endif
   DeviceFactory &mFactory;
 
   Handler<std::string> mSceneChangeHandler;
