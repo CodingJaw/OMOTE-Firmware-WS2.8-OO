@@ -30,7 +30,11 @@ jobs:
 
       - name: Prepare PlatformIO environments
         working-directory: ./Platformio
-        run: pio pkg install
+        shell: bash
+        run: |
+          for env in esp32_Rev1 esp32_Rev5 esp32_Rev5_3661; do
+            pio pkg install --environment "$env"
+          done
 
       - name: Build Rev_1 Hardware
         working-directory: ./Platformio
