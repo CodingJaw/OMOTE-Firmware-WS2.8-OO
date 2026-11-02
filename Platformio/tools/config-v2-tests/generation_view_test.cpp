@@ -12,16 +12,17 @@ int main() {
     {"Commands/Roku.json", std::string(64,'c'), 32},
     {"Scenes.json", std::string(64,'b'), 101},
     {"Scenes/TV.json", std::string(64,'d'), 80},
-    {"HaSettings.json", std::string(64,'e'), 55}
+    {"Pages/TV.json", std::string(64,'e'), 55}
   };
   Pinned pinned;
   assert(pinned.bind(a));
   assert(pinned.valid() && pinned.fileCount()==4);
   const auto publicFiles = pinned.publicPaths();
-  assert(publicFiles.size() == 3);
+  assert(publicFiles.size() == 4);
   assert(publicFiles[0] == "Commands/Roku.json");
-  assert(publicFiles[1] == "Scenes.json");
-  assert(publicFiles[2] == "Scenes/TV.json");
+  assert(publicFiles[1] == "Pages/TV.json");
+  assert(publicFiles[2] == "Scenes.json");
+  assert(publicFiles[3] == "Scenes/TV.json");
   assert(pinned.revision()==a.revision);
   std::string path;
   assert(pinned.vfsPathFor("Scenes.json", path));
@@ -30,7 +31,14 @@ int main() {
   assert(path.empty()); // Must NEVER return the legacy root fallback.
   assert(!pinned.vfsPathFor("../HaSettings.json", path));
   assert(!pinned.vfsPathFor("HaStateCache.json", path));
-  assert(pinned.vfsPathFor("HaSettings.json", path));
+  assert(!pinned.vfsPathFor("HaSettings.json", path));
+  assert(path.empty());
+  // A malicious or outdated manifest containing secrets is not bindable.
+  auto privateManifest = a;
+  privateManifest.files[3].path = "HaSettings.json";
+  Pinned rejected;
+  assert(!rejected.bind(privateManifest));
+  assert(!rejected.valid());
 
   auto b = a;
   b.revision = std::string(64,'f');
