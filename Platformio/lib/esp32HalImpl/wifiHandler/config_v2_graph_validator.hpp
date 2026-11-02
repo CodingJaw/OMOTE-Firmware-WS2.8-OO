@@ -119,6 +119,28 @@ Result validate(const std::vector<config_v2_manifest_index::Entry> &entries,
       d.Parse<rapidjson::kParseCommentsFlag>(bytes.data(), bytes.size());
       if (d.HasParseError() || !d.IsObject())
         return {Error::InvalidJson, e.path};
+      // JsonDevice::parseGeneralInfo() unconditionally calls GetString()
+      // on "name"; KeyAction::KeyAction() calls HasMember() on each key
+      // object and ObjectEmpty() on each event's action. Validate these
+      // shapes before an active manifest can reach that runtime code.
+      if (e.path.compare(0, 8, "Devices/") == 0) {
+        if (!d.HasMember("name") || !d["name"].IsString() ||
+            !d["name"].GetStringLength())
+          return {Error::InvalidStructure, e.path};
+        if (d.HasMember("keys")) {
+          if (!d["keys"].IsObject())
+            return {Error::InvalidStructure, e.path};
+          for (auto key = d["keys"].MemberBegin();
+               key != d["keys"].MemberEnd(); ++key) {
+            if (!key->value.IsObject())
+              return {Error::InvalidStructure, e.path};
+            for (auto event = key->value.MemberBegin();
+                 event != key->value.MemberEnd(); ++event)
+              if (!event->value.IsObject())
+                return {Error::InvalidStructure, e.path};
+          }
+        }
+      }
     }
   }
 
