@@ -89,6 +89,42 @@ exists; the presence of these endpoints is NOT deployment authorization.
 Never manually write the NVS `active` pointer or an incomplete manifest
 to test this without a proven physical recovery procedure.
 
+## Feature-branch implementation progress — 2026-11-02
+
+- The complete read-only preview at commit `54e5970` passed both the
+  Waveshare CI build and all host safety tests; the user-confirmed physical
+  device is still running the earlier read-only image. **No new firmware
+  has been hardware-flashed or recovery-tested.**
+- Added an **inert host-testable transaction lifecycle policy** for a single
+  outstanding transaction. It binds a random transaction ID to a
+  cryptographically authenticated session ID, independent HA-admin action
+  ID, the expected active digest and the proposed digest. It has bounded
+  expiry, abort/disconnect reset, full-validation-before-approval phase
+  ordering and one-time physical gate semantics. The security IDs are
+  **trusted inputs**: the module neither authenticates them nor performs
+  cryptography. No HTTP route calls the module.
+- The lifecycle intentionally **does not consume** the touchscreen approval:
+  only the final storage `activatePrepared()` call may consume the one-shot
+  approval while checking the persisted active pointer. The manager must
+  call `committed()` only after the NVS write actually succeeds.
+- Active-mode JSON device and action discovery now enumerates the pinned
+  manifest rather than the legacy `Devices/` / `Actions/` directories.
+  Existing saved JSON-device paths are normalized to logical
+  `Devices/*.json` paths; missing/unlisted active files do **not** fall
+  back to root. Validated JSON device names and key/action shapes prevent
+  RapidJSON assertions; a separate lifetime bug in the saved JSON-device
+  `file_path` serialization was also fixed.
+- New host regression tests cover session/administrator-action binding,
+  missing physical confirmation, approval replay, expiry/wraparound,
+  logical-path traversal and stale/forged object paths.
+
+The changes above are **feature-branch source only** and are not end-to-end
+authentication or deployment. The latest CI results must pass before
+any further hardware test is considered. Outstanding runtime audits
+include additional source readers and actual PNG/JPEG decoding from
+extensionless SHA-based LittleFS object paths. Recovery networking and
+manual flash restoration are also unproven.
+
 ## Secure transaction contract
 
 The proposed mutually authenticated, locally approved upload protocol,
