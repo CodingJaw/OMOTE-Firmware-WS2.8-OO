@@ -1,3 +1,4 @@
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && defined(OMOTE_WAVESHARE28V2) && !defined(IS_SIMULATOR)
 #include "PairingPreviewPage.hpp"
 #include "Label.hpp"
 #include <Arduino.h>
@@ -58,3 +59,5 @@ void PairingPreviewPage::refresh() {
       code_->SetText("Expired");
   }
 }
+
+#endif // Waveshare 2.8 V2 Config v2 local preview
