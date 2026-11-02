@@ -11,6 +11,9 @@
 #include "SettingsPage.hpp"
 #include "editor_sync_mode.hpp"
 #include "device_settings.hpp"
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && defined(OMOTE_WAVESHARE28V2) && !defined(IS_SIMULATOR)
+#include "PairingPreviewPage.hpp"
+#endif
 #if defined(OMOTE_CONFIG_V2_PREVIEW) && !defined(IS_SIMULATOR)
 #include "config_v2_single_active_runtime.hpp"
 #endif
@@ -80,6 +83,13 @@ JsonHomeScreen::JsonHomeScreen(DeviceFactory &aFactory)
   mSceneChangeHandler = [this](std::string aNewScene) { GoToSceneSelection(aNewScene); };
 
   mStatusBar->SetTopButtonLabel("Select Scene");
+
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && defined(OMOTE_WAVESHARE28V2) && !defined(IS_SIMULATOR)
+  mStatusBar->AddExtraSettingItem({"Pair Home Assistant (preview)", LV_SYMBOL_WIFI, [] {
+    return std::make_unique<UI::Page::PairingPreviewPage>(
+        config_v2_pairing_policy::Entry::SettingsTouch);
+  }});
+#endif
 
   mStatusBar->AddExtraSettingItem({"Editor sync", LV_SYMBOL_REFRESH, [] {
     editor_sync_mode::enter(true);
@@ -261,6 +271,26 @@ void JsonHomeScreen::SetBgColor(lv_color_t value, lv_part_t selector) {
 }
 
 bool JsonHomeScreen::OnKeyEvent(KeyPressAbstract::KeyEvent aKeyEvent) {
+#if defined(OMOTE_CONFIG_V2_PREVIEW) && defined(OMOTE_WAVESHARE28V2) && !defined(IS_SIMULATOR)
+  // Real keypad events only: the Waveshare's external keypad is NOT wired
+  // in the current adapter, so this path is dormant until physical wiring.
+  // Never invoke the chord detector from an HTTP, MQTT or BLE handler.
+  using PairingButton = config_v2_pairing_entry::Button;
+  using PairingEvent = config_v2_pairing_entry::Event;
+  const auto button = aKeyEvent.mId == KeyPressAbstract::KeyId::Home ?
+      PairingButton::Home : aKeyEvent.mId == KeyPressAbstract::KeyId::Back ?
+      PairingButton::Back : PairingButton::Other;
+  const auto event = aKeyEvent.mType == KeyPressAbstract::KeyEvent::Type::Press ?
+      PairingEvent::Press : aKeyEvent.mType == KeyPressAbstract::KeyEvent::Type::Release ?
+      PairingEvent::Release : aKeyEvent.mType == KeyPressAbstract::KeyEvent::Type::Long ?
+      PairingEvent::Long : PairingEvent::Other;
+  if (mPairingChord.observe(button, event)) {
+    UI::Screen::Manager::getInstance().pushPopUp(
+        std::make_unique<UI::Page::PairingPreviewPage>(
+            config_v2_pairing_policy::Entry::PhysicalKeyChord));
+    return true;
+  }
+#endif
   // handle exit sequence first
   if ((aKeyEvent.mId == KeyPressAbstract::KeyId::Power)) {
     if (aKeyEvent.mType == Command::KeyPressTypes::Press) {
