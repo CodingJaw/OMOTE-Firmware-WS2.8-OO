@@ -35,6 +35,17 @@ unchanged until signed off.
    place before any pointer update. A second validation is required when
    activating a previously prepared manifest.
 
+## Approved pairing UX and implementation constraints
+
+Operator decisions: both local touchscreen Settings and a physical-button
+chord, a six-digit code displayed on the remote and entered in HA followed
+by explicit touchscreen approval, and **fresh pairing after HA replacement
+without erasing existing configuration**. For current preview code and the
+proposed reviewed PAKE design, see
+[CONFIG_V2_PAIRING_IMPLEMENTATION.md](CONFIG_V2_PAIRING_IMPLEMENTATION.md).
+The local pairing screen is a clearly labeled non-network preview, not a
+usable authenticated session. Physical keypad wiring is pending.
+
 ## Pairing (to implement; cryptographic details not yet finalized)
 
 - Establish the device's cryptographic identity through hardware UI
