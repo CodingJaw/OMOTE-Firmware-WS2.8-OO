@@ -110,7 +110,11 @@ SettingsPage::SettingsPage()
 
   mSettingsList->AddItem("Wifi", LV_SYMBOL_WIFI, [this] { PushWifiSettings(); }, SettingItemHeight);
 #if defined(OMOTE_CONFIG_V2_PREVIEW) && defined(OMOTE_WAVESHARE28V2) && !defined(IS_SIMULATOR)
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  mSettingsList->AddItem("SEC2 encrypted LAB test", LV_SYMBOL_SETTINGS, [] {
+#else
   mSettingsList->AddItem("HA pairing (preview)", LV_SYMBOL_SETTINGS, [] {
+#endif
     UI::Screen::Manager::getInstance().pushPopUp(
         std::make_unique<PairingPreviewPage>(
             config_v2_pairing_policy::Entry::SettingsTouch));
