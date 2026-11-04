@@ -6,7 +6,7 @@
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
 #include "config_v2_sec2_lab_transport.hpp"
 #include "config_v2_pairing_attempt_budget.hpp"
-#include "config_v2_pairing_attempt_nvs.hpp"
+#include "config_v2_sec2_lab_budget.hpp"
 #endif
 #include <lvgl.h>
 
@@ -35,8 +35,8 @@ private:
   Widget::Button *reject_ = nullptr;
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
   config_v2_sec2_lab_transport::Probe labProbe_;
-  config_v2_pairing_attempt_nvs::Store labAttemptStore_;
-  config_v2_pairing_attempt_budget::Gate<config_v2_pairing_attempt_nvs::Store>
+  config_v2_sec2_lab_budget::Store labAttemptStore_;
+  config_v2_pairing_attempt_budget::Gate<config_v2_sec2_lab_budget::Store>
       labAttempts_{labAttemptStore_, 0};
   Widget::Button *labStart_ = nullptr;
 #endif
