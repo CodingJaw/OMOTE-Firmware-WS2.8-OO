@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import unittest
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 HTTP = ROOT / "lib/esp32HalImpl/wifiHandler/config_http.cpp"
 CONTRACT = Path(__file__).with_name("pairing_v1_preview_contract.json")
 SRP = ROOT / "lib/WaveshareOmote/config_v2_sec2_srp_material.cpp"
