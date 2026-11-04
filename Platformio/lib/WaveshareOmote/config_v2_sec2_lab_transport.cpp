@@ -26,10 +26,36 @@
 #endif
 
 namespace config_v2_sec2_lab_transport {
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+Probe *Probe::activeLab_ = nullptr;
+#endif
 
 Probe::~Probe() { stop(); }
 
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+
+esp_err_t Probe::gatedSecurityRequest(
+    protocomm_security_handle_t handle, const void *params,
+    std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+    std::uint8_t **output, ssize_t *outLen, void *ctx) {
+  Probe *lab = activeLab_;
+  // This gate wraps the *real* Espressif Security2 request handler.
+  // Every incoming Security2 frame (both the public-key and proof frames)
+  // consumes its own persisted quota BEFORE any SRP work is performed.
+  // This is intentionally stricter than five complete PIN attempts.
+  // Never reset this NVS count from HTTPD, reboot, or a network endpoint.
+  if (lab == nullptr || !lab->active() ||
+      static_cast<std::uint32_t>(millis() - lab->startedAtMs_) >= kMaxWindowMs)
+    return ESP_ERR_INVALID_STATE;
+  constexpr std::uint32_t kMaximumMessages = 5;
+  if (lab->messageStore_.reserveSecurityMessage(kMaximumMessages) !=
+      config_v2_pairing_attempt_budget::Reservation::Allowed)
+    return ESP_ERR_INVALID_STATE;
+  if (!protocomm_security2.security_req_handler)
+    return ESP_ERR_INVALID_STATE;
+  return protocomm_security2.security_req_handler(
+      handle, params, session, input, inLen, output, outLen, ctx);
+}
 
 esp_err_t Probe::probeRequest(std::uint32_t /*session*/,
                              const std::uint8_t *input, ssize_t inLen,
@@ -58,7 +84,7 @@ esp_err_t Probe::probeRequest(std::uint32_t /*session*/,
 bool Probe::startFromTrustedLocalTouch(const char *pin,
                                       std::size_t len,
                                       std::uint32_t nowMs) {
-  if (active()) return false;
+  if (active() || activeLab_ != nullptr) return false;
   if (!material_.generate(pin, len)) return false;
   protocomm_t *candidate = protocomm_new();
   if (!candidate) {
@@ -71,13 +97,19 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   config.data.config.port = kPort;
   config.data.config.stack_size = 6144;
   config.data.config.task_priority = tskIDLE_PRIORITY + 5;
+  // Publication precedes HTTPD registration, but an incomplete listener
+  // cannot authenticate because active() is false until setup finishes.
+  activeLab_ = this;
+  startedAtMs_ = nowMs;
+  boundedSecurity_ = protocomm_security2;
+  boundedSecurity_.security_req_handler = &Probe::gatedSecurityRequest;
   bool started = false;
   bool good = protocomm_httpd_start(candidate, &config) == ESP_OK;
   if (good) {
     started = true;
     const auto params = material_.params();
     good = protocomm_set_security(
-        candidate, kSessionEndpoint, &protocomm_security2, &params) == ESP_OK;
+        candidate, kSessionEndpoint, &boundedSecurity_, &params) == ESP_OK;
   }
   if (good) {
     char version[112] = {};
@@ -102,6 +134,7 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
       return false;
     }
     protocomm_delete(candidate);
+    activeLab_ = nullptr;
     material_.clear();
     return false;
   }
@@ -118,6 +151,7 @@ void Probe::tick(std::uint32_t nowMs) {
 
 void Probe::stop() {
   if (!pc_) {
+    if (activeLab_ == this) activeLab_ = nullptr;
     material_.clear();
     return;
   }
@@ -133,6 +167,7 @@ void Probe::stop() {
   }
   protocomm_delete(pc_);
   pc_ = nullptr;
+  if (activeLab_ == this) activeLab_ = nullptr;
   material_.clear();
 }
 
