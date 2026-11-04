@@ -82,8 +82,9 @@ firmware build and requires the separate `waveshare28v2_omote_sec2_lab`
 environment. It never starts automatically or from network input. Only
 in that opt-in LAB build, go to Settings → SEC2 encrypted LAB test and
 physically tap **Start lab**. This calls `Probe::startFromTrustedLocalTouch()`
-after reserving a persistent NVS attempt-window counter, shows the local
-six-digit code and opens port 18082 for up to two minutes. Closing or
+after reserving a persistent NVS attempt-window counter in the LAB-ONLY
+`omsec2lab/windows` namespace (not production `omotepair/attempts`),
+shows the local six-digit code and opens port 18082 for up to two minutes. Closing or
 cancelling the local page also stops the listener. Normal port 80 remains
 unchanged and read-only.
 
