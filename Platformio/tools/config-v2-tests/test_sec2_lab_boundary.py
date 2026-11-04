@@ -1,0 +1,73 @@
+"""Keep the experimental encrypted probe distinct from production pairing.
+
+These static tests complement the dedicated Waveshare and lab build targets.
+They are NOT proofs of actual cryptographic interoperability on hardware.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+LIB = ROOT / "lib/WaveshareOmote"
+SRC = (LIB / "config_v2_sec2_lab_transport.cpp").read_text()
+HEADER = (LIB / "config_v2_sec2_lab_transport.hpp").read_text()
+CONFIG = (ROOT / "platformio.ini").read_text()
+HTTP = (ROOT / "lib/esp32HalImpl/wifiHandler/config_http.cpp").read_text()
+
+
+class Security2LabBoundaryTests(unittest.TestCase):
+    def test_lab_flag_not_in_default_waveshare(self):
+        normal = CONFIG.split("[env:waveshare28v2_omote]", 1)[1].split(
+            "[env:waveshare28v2_omote_sec2_lab]", 1
+        )[0]
+        self.assertNotIn("-D OMOTE_CONFIG_V2_SEC2_LAB_PROBE", normal)
+        lab = CONFIG.split("[env:waveshare28v2_omote_sec2_lab]", 1)[1]
+        self.assertIn("extends = env:waveshare28v2_omote", lab)
+        self.assertIn("-D OMOTE_CONFIG_V2_SEC2_LAB_PROBE=1", lab)
+        self.assertIn("#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)", SRC)
+        self.assertIn("return false;", SRC.split("#else  // Lab transport", 1)[1])
+
+    def test_probe_is_not_auto_started_or_network_triggered(self):
+        self.assertIn("bool Probe::startFromTrustedLocalTouch(", SRC)
+        self.assertIn("kMaxWindowMs = 120000", HEADER)
+        self.assertIn("protocomm_httpd_start(", SRC)
+        self.assertIn("protocomm_httpd_stop(", SRC)
+        self.assertIn("config.data.config.port = kPort;", SRC)
+        self.assertIn("kPort = 18082", HEADER)
+        self.assertNotIn("18082", HTTP)
+        self.assertNotIn("startFromTrustedLocalTouch", HTTP)
+        # Zero actual entrypoints until a physically confirmed on-device UI
+        # is tested; this prevents a network caller from activating the probe.
+        for p in (ROOT / "src").rglob("*"):
+            if p.suffix in (".cpp", ".hpp", ".h"):
+                self.assertNotIn("startFromTrustedLocalTouch", p.read_text(), p.name)
+
+    def test_lab_has_only_one_no_secret_encrypted_endpoint(self):
+        self.assertIn('kSessionEndpoint[] = "prov-session"', HEADER)
+        self.assertIn('kProbeEndpoint[] = "omote-probe"', HEADER)
+        self.assertEqual(SRC.count("protocomm_add_endpoint("), 1)
+        self.assertIn("protocomm_set_security(", SRC)
+        self.assertIn("&protocomm_security2", SRC)
+        self.assertIn('static constexpr char kReply[] = "OMOTE-SEC2-OK-V1"', SRC)
+        for dangerous in (
+            "handleFsWrite", "handleFsDelete", "/api/device/settings",
+            "config_v2_single_active_commit", "replaceAfterAuthenticatedPhysicalApproval",
+            "handleV1MutationDisabled", "passphrase", "mqtt", "ftpRestoreCredentials"
+        ):
+            self.assertNotIn(dangerous, SRC)
+        self.assertIn("material_.clear()", SRC)
+
+    def test_manual_client_does_not_take_pin_as_cli_argument(self):
+        client = (Path(__file__).with_name("sec2_lab_client.py")).read_text()
+        self.assertIn("getpass(", client)
+        self.assertIn("Security2(", client)
+        self.assertIn("sec.encrypt_data(", client)
+        self.assertIn("sec.decrypt_data(", client)
+        self.assertNotIn('ap.add_argument("--pin"', client)
+        self.assertNotIn("verbose=True", client)
+        self.assertIn("--ack-lab-only", client)
+
+
+if __name__ == "__main__":
+    unittest.main()
