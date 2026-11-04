@@ -1,8 +1,6 @@
 # Security2 interoperability gate — pairing candidate (NOT ENABLED)
 
-Status: **compile-time feasibility evaluation only**, November 2, 2026. This
-document does not authorize network pairing, unauthenticated provisioning,
-secret access, configuration writes, or firmware deployment.
+Status: **read-only protocol discovery + isolated SRP material generation only**, November 4, 2026. This document does not authorize network pairing, unauthenticated provisioning, secret access, configuration writes, or firmware deployment.
 
 ## Candidate
 
@@ -32,6 +30,41 @@ secret access, configuration writes, or firmware deployment.
   integrate an isolated loopback Security2 handshake with the pinned
   Espressif Python client, and only then consider a device-local pairing
   coordinator. No endpoint may submit an unverified `VerifiedPeer`.
+
+## Implemented preparation (2026-11-04)
+
+- Firmware feature branch has a strictly **read-only** public
+  `GET /api/config/v2/pairing/status` endpoint. Its entire response is pinned
+  in `Platformio/tools/config-v2-tests/pairing_v1_preview_contract.json`.
+  The response always reports disabled pairing, unavailable cryptographic
+  session, no transport port and no deployment authorization.
+- New `WaveshareOmote/config_v2_sec2_srp_material.*` uses the **real**
+  ESP-IDF `esp_srp_gen_salt_verifier` API to produce a new 16-byte salt
+  and verifier from a six-digit code supplied by the local, CSPRNG-backed
+  pairing window. The owning object rejects non-six-digit PINs and wipes and
+  frees its material on destruction. No fixed PIN is embedded.
+- The SRP material is **not yet wired to a Security2 session**. It must remain
+  valid throughout a future provisional pairing window and be destroyed
+  on expiry/cancellation/approval. No network handler can request its PIN.
+- The existing Arduino WebServer on port 80 stays legacy read-only.
+  A separate bounded, short-lived Espressif HTTPD transport may be needed
+  for Security2; transport ownership, port allocation and memory usage
+  must be tested before any listener is started.
+- HACS `main` version `0.1.0-dev20` adds
+  `OMOTE Manager → Overview → Check pairing readiness`. It displays the
+  preview or a legacy 404 as unavailable, never as paired. Its CI pins
+  and compares this firmware-owned pairing contract.
+- The static firmware API tests permit only the exact three public Config v2
+  GET routes (capabilities, storage status, pairing status); they block
+  pairing or transaction mutation routes.
+
+**Remaining engineering gates before a live pair:** independent test of
+SRP salt/verifier against Espressif's official Python Security2 client,
+bounded encrypted HTTPD handshake and memory measurements, paired long-lived
+device identity proof, HA key possession proof, persistent attempt lockout,
+fingerprint confirmation on the actual touchscreen, HA secure credential
+storage and revocation, reconnect and re-pairing. SHA-256 fingerprints or
+mDNS identifiers alone are *not* proof of identity.
 
 ## Security warning
 
