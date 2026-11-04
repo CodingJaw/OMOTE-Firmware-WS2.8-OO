@@ -11,10 +11,11 @@
 // cancellation are integrated. A completed probe is NOT a trusted pairing.
 #if defined(OMOTE_WAVESHARE28V2) && defined(OMOTE_CONFIG_V2_PREVIEW)
 #include "config_v2_sec2_srp_material.hpp"
+#include "protocomm.h"
+#include "esp_err.h"
+#include <sys/types.h>
 #include <cstddef>
 #include <cstdint>
-
-struct protocomm;
 
 namespace config_v2_sec2_lab_transport {
 constexpr std::uint16_t kPort = 18082;
@@ -39,11 +40,11 @@ public:
   bool active() const { return pc_ != nullptr; }
 
 private:
-  static int probeRequest(std::uint32_t session,
-                          const std::uint8_t *input, long inLen,
-                          std::uint8_t **output, long *outLen,
+  static esp_err_t probeRequest(std::uint32_t session,
+                          const std::uint8_t *input, ssize_t inLen,
+                          std::uint8_t **output, ssize_t *outLen,
                           void *ctx);
-  protocomm *pc_ = nullptr;
+  protocomm_t *pc_ = nullptr;
   config_v2_sec2_srp_material::Ephemeral material_;
   std::uint32_t startedAtMs_ = 0;
 };
