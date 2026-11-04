@@ -46,8 +46,24 @@ class TestPreviewContract(unittest.TestCase):
             self.assertIn(route, block)
 
     def test_no_preview_transaction_route(self):
-        registration = self.source.split("void registerRoutes()", 1)[1].split("server.onNotFound", 1)[0]
-        self.assertNotRegex(registration, r'server\.on\("/api/config/v2/(?:transactions|pair)')
+        registration = self.source.split("void registerRoutes()", 1)[1]
+        block = registration.split("#if defined(OMOTE_CONFIG_V2_PREVIEW)", 1)[1].split("#else", 1)[0]
+        permitted = {
+            "/api/config/v2/capabilities": "handleV2CapabilitiesPreview",
+            "/api/config/v2/storage/status": "handleV2StorageStatus",
+            "/api/config/v2/pairing/status": "handleV2PairingStatusPreview",
+        }
+        routes = re.findall(
+            r'server\.on\("(/api/config/v2/[^"]+)",\s*(HTTP_\w+),\s*(\w+)\)',
+            block,
+        )
+        self.assertEqual(len(routes), len(permitted))
+        for path, method, handler in routes:
+            self.assertIn(path, permitted)
+            self.assertEqual(method, "HTTP_GET")
+            self.assertEqual(handler, permitted[path])
+        # The v2 preview exposes informational GETs only, never a pairing
+        # code submission, handshake or any transaction mutation.
 
 
 if __name__ == "__main__":
