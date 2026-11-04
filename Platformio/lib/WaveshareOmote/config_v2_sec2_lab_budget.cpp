@@ -13,6 +13,7 @@ namespace config_v2_sec2_lab_budget {
 namespace {
 constexpr char kNamespace[] = "omsec2lab";
 constexpr char kCounter[] = "windows";
+constexpr char kSecMessageCounter[] = "secmsgs";
 SemaphoreHandle_t budgetMutex() {
   static SemaphoreHandle_t sem = xSemaphoreCreateMutex();
   return sem;
@@ -31,14 +32,14 @@ private:
 } // namespace
 
 config_v2_pairing_attempt_budget::Reservation
-Store::reserve(std::uint32_t maximum) {
+reserveKey(const char *key, std::uint32_t maximum) {
   using config_v2_pairing_attempt_budget::Reservation;
   Guard guard;
   if (!guard.held() || maximum == 0) return Reservation::StorageError;
   Preferences nvs;
   if (!nvs.begin(kNamespace, false)) return Reservation::StorageError;
-  const bool exists = nvs.isKey(kCounter);
-  const std::uint32_t previous = nvs.getUInt(kCounter, UINT32_MAX);
+  const bool exists = nvs.isKey(key);
+  const std::uint32_t previous = nvs.getUInt(key, UINT32_MAX);
   if (exists && previous == UINT32_MAX) {
     nvs.end();
     return Reservation::StorageError;
@@ -49,10 +50,21 @@ Store::reserve(std::uint32_t maximum) {
     return Reservation::Exhausted;
   }
   const auto next = used + 1u;
-  const bool written = nvs.putUInt(kCounter, next) == sizeof(next);
-  const bool verified = written && nvs.getUInt(kCounter, UINT32_MAX) == next;
+  const bool written = nvs.putUInt(key, next) == sizeof(next);
+  const bool verified = written && nvs.getUInt(key, UINT32_MAX) == next;
   nvs.end();
   return verified ? Reservation::Allowed : Reservation::StorageError;
+}
+
+
+config_v2_pairing_attempt_budget::Reservation
+Store::reserve(std::uint32_t maximum) {
+  return reserveKey(kCounter, maximum);
+}
+
+config_v2_pairing_attempt_budget::Reservation
+Store::reserveSecurityMessage(std::uint32_t maximum) {
+  return reserveKey(kSecMessageCounter, maximum);
 }
 
 bool Store::reset() {
