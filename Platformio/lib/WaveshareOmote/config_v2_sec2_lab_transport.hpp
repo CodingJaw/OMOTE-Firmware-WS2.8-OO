@@ -12,6 +12,9 @@
 // cancellation are integrated. A completed probe is NOT a trusted pairing.
 #if defined(OMOTE_WAVESHARE28V2) && defined(OMOTE_CONFIG_V2_PREVIEW)
 #include "config_v2_sec2_srp_material.hpp"
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+#include "config_v2_sec2_lab_budget.hpp"
+#endif
 #include "protocomm.h"
 #include "esp_err.h"
 #include <sys/types.h>
@@ -41,6 +44,13 @@ public:
   bool active() const { return pc_ != nullptr; }
 
 private:
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  static esp_err_t gatedSecurityRequest(
+      protocomm_security_handle_t handle, const void *params,
+      std::uint32_t session,
+      const std::uint8_t *input, ssize_t inLen,
+      std::uint8_t **output, ssize_t *outLen, void *ctx);
+#endif
   static esp_err_t probeRequest(std::uint32_t session,
                           const std::uint8_t *input, ssize_t inLen,
                           std::uint8_t **output, ssize_t *outLen,
@@ -48,6 +58,11 @@ private:
   protocomm_t *pc_ = nullptr;
   config_v2_sec2_srp_material::Ephemeral material_;
   std::uint32_t startedAtMs_ = 0;
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  protocomm_security_t boundedSecurity_{};
+  config_v2_sec2_lab_budget::Store messageStore_;
+  static Probe *activeLab_;
+#endif
 };
 
 } // namespace config_v2_sec2_lab_transport
