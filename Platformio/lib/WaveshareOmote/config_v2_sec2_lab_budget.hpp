@@ -15,6 +15,11 @@ public:
   // Reserved solely for a future explicit LOCAL physical rearm operation.
   // No application, network or timed call invokes reset().
   bool reset();
+  // Reserve NVS counter before EVERY Security2 protocol message (including
+  // initial and proof frames). Conservatively counts a full handshake twice.
+  // The sixth message is refused even if the board rebooted.
+  config_v2_pairing_attempt_budget::Reservation reserveSecurityMessage(
+      std::uint32_t maximum);
 };
 } // namespace config_v2_sec2_lab_budget
 #endif
