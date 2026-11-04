@@ -3,8 +3,10 @@
 
 This is NOT a Home Assistant pairing client or a trusted device enrollment.
 Requires a separately flashed, explicitly local-touch-enabled SEC2 LAB image.
-Current OMOTE firmware DOES NOT start this listener and has no UI trigger.
-Run only after the firmware-side safety gates and physical UI are verified.
+Normal OMOTE firmware NEVER starts this listener. An opt-in LAB image has
+an explicit on-device Settings > SEC2 encrypted LAB test button and separate
+Start lab physical touch, but has no production credential/peer trust controls.
+Run only on a backed-up, deliberately flashed test device.
 
 Prerequisites:
   - Official ESP-IDF Python provisioning tools for compatible IDF release
