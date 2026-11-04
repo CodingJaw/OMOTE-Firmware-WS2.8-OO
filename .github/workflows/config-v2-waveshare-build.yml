@@ -38,3 +38,6 @@ jobs:
       - name: Compile Waveshare OMOTE (no upload)
         working-directory: Platformio
         run: pio run -e waveshare28v2_omote
+      - name: Compile isolated Security2 encrypted probe (no upload, no listener)
+        working-directory: Platformio
+        run: pio run -e waveshare28v2_omote_sec2_lab
