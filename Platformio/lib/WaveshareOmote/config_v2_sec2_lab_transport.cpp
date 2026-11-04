@@ -20,6 +20,7 @@
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
 #include "protocomm_httpd.h"
 #include "protocomm_security2.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #endif
@@ -94,10 +95,10 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   if (!good) {
     // Never wipe salt/verifier while Security2 might still be using them.
     if (started && protocomm_httpd_stop(candidate) != ESP_OK) {
-      // HTTPD could still reference candidate; retain it and retry stopping
-      // during tick. No success or paired state can be returned.
-      pc_ = candidate;
-      startedAtMs_ = nowMs - kMaxWindowMs;
+      // A failing HTTPD stop may leave callbacks borrowing the SRP buffers.
+      // Fail shut by rebooting the LAB image rather than freeing them.
+      // No service or pairing window auto-starts after reboot.
+      esp_restart();
       return false;
     }
     protocomm_delete(candidate);
@@ -123,7 +124,13 @@ void Probe::stop() {
   // Do not delete the Security2 instance or its borrowed SRP buffers until
   // HTTPD has fully stopped, so concurrent network callbacks cannot read
   // freed salt/verifier memory.
-  if (protocomm_httpd_stop(pc_) != ESP_OK) return;
+  if (protocomm_httpd_stop(pc_) != ESP_OK) {
+    // A destructor would otherwise free borrowed Security2 parameters
+    // while a still-running HTTPD task might dereference them. In the
+    // explicit LAB environment, a restart is the safer failure mode.
+    esp_restart();
+    return;
+  }
   protocomm_delete(pc_);
   pc_ = nullptr;
   material_.clear();
