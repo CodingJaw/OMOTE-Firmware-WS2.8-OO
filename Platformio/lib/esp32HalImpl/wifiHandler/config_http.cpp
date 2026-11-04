@@ -216,6 +216,24 @@ void handleV2CapabilitiesPreview() {
       "\"write_protection_enabled\":true,"
       "\"legacy_http_writes_disabled\":true}");
 }
+
+void handleV2PairingStatusPreview() {
+  // Discovery is not authentication. This never reveals PINs, identifiers,
+  // verifiers or pairing-session state; no pairing transport is started.
+  // Keep this literal response in sync with pairing_v1_preview_contract.json.
+  sendJson(200,
+      "{\"api_version\":\"omote-pairing-v1-preview\","
+      "\"state\":\"disabled\","
+      "\"security_scheme\":\"protocomm-security2-srp6a-aes256gcm\","
+      "\"transport\":\"not-started\","
+      "\"transport_port\":0,"
+      "\"pairing_window_open\":false,"
+      "\"paired\":false,"
+      "\"device_identity_available\":false,"
+      "\"touch_approval_required\":true,"
+      "\"session_ready\":false,"
+      "\"deployment_enabled\":false}");
+}
 #endif
 
 std::string vfsPath(const std::string &rel) {
@@ -712,6 +730,7 @@ void registerRoutes() {
   server.on("/api/fs/read/chunk", HTTP_GET, handleFsReadChunk);
 #if defined(OMOTE_CONFIG_V2_PREVIEW)
   server.on("/api/config/v2/capabilities", HTTP_GET, handleV2CapabilitiesPreview);
+  server.on("/api/config/v2/pairing/status", HTTP_GET, handleV2PairingStatusPreview);
   server.on("/api/config/v2/storage/status", HTTP_GET, handleV2StorageStatus);
   server.on("/api/fs/write", HTTP_POST, handleV1MutationDisabled);
   server.on("/api/fs/write", HTTP_PUT, handleV1MutationDisabled);
