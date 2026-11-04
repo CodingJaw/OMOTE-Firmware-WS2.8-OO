@@ -88,11 +88,21 @@ shows the local six-digit code and opens port 18082 for up to two minutes. Closi
 cancelling the local page also stops the listener. Normal port 80 remains
 unchanged and read-only.
 
-No device identity, HA key-possession proof, persistent **per-SRP-candidate**
-attempt lockout, peer-fingerprint approval, credential persistence or
-remote-write endpoint is implemented in this laboratory transport. A six-digit code is NOT
-sufficient protection for a production network service without those
-safeguards. **Do not flash the lab image as a production remote.**
+The LAB build now reserves a second flash-backed counter before **every
+Security2 session/proof message**. The independent
+`omsec2lab/secmsgs` key allows at most five Security2 frames across
+reboots, so a normal two-message handshake consumes two reservations.
+Failure to read, persist or verify the counter aborts the SRP request
+**before** invoking Espressif's security handler. This is deliberately
+more restrictive than five full PIN guesses and cannot be reset remotely.
+The LAB code has no automated rearm mechanism yet; exhausting the quota
+requires a separately reviewed physical recovery path before further tests.
+
+No device identity, HA key-possession proof, peer-fingerprint approval,
+credential persistence or remote-write endpoint is implemented in this
+laboratory transport. The per-message limiter is necessary but **not
+sufficient** for production protection. **Do not flash the lab image as a
+production remote.**
 
 The manual reference client at
 `Platformio/tools/config-v2-tests/sec2_lab_client.py` calls Espressif's
@@ -109,11 +119,13 @@ python3 Platformio/tools/config-v2-tests/sec2_lab_client.py \
   --host 10.0.10.121 --port 18082 --ack-lab-only
 ```
 
-Only run this after the dedicated lab image passes CI, a verified full-flash
-USB backup, and an explicit local Settings touchscreen action. The NVS
-counter currently limits physical lab **window starts**, not individual
-SRP candidate guesses within each window. The lab transport is therefore
-NOT suitable for production pairing or Internet-exposed networks.
+Only run this after the dedicated lab image passes CI, a verified
+full-flash USB backup, and an explicit local Settings touchscreen action.
+Two separate LAB NVS counters limit physical window openings and individual
+Security2 messages. A successful handshake consumes two security-message
+reservations. After five messages, new handshakes fail closed; there is no
+automatic reset or production credential enrollment. This LAB transport
+is not suitable for production pairing or Internet-exposed networks.
 The user-selected final protocol also requires a stable device identity
 and an HA public-key possession challenge bound to the encrypted session,
 then a separate explicit on-device touchscreen confirmation of that peer.
