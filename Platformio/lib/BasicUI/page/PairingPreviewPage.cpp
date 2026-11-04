@@ -5,6 +5,9 @@
 #include <Arduino.h>
 #include <esp_system.h>
 #include <string>
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+#include <WiFi.h>
+#endif
 
 using namespace UI::Page;
 
@@ -16,7 +19,11 @@ PairingPreviewPage::PairingPreviewPage(config_v2_pairing_policy::Entry entry)
     return esp_random();
   });
 
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  auto *heading = AddNewElement<UI::Widget::Label>("SECURITY2 LAB - NO TRUST");
+#else
   auto *heading = AddNewElement<UI::Widget::Label>("HA PAIRING - PREVIEW ONLY");
+#endif
   heading->SetWidth(208);
   heading->SetHeight(20);
   heading->AlignTo(this, LV_ALIGN_TOP_MID, 0, 8);
@@ -39,6 +46,13 @@ PairingPreviewPage::PairingPreviewPage(config_v2_pairing_policy::Entry entry)
       "Secure session and HA identity\n"
       "verification are not connected.\n"
       "Device writes are disabled.");
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  status_->SetText(
+      "Local-only encrypted test.\n"
+      "Tap Start test to open the\n"
+      "short-lived lab listener.\n"
+      "NOT a trusted pairing.");
+#endif
   status_->SetWidth(208);
   status_->SetHeight(72);
   status_->AlignTo(fingerprint_, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
@@ -56,6 +70,15 @@ PairingPreviewPage::PairingPreviewPage(config_v2_pairing_policy::Entry entry)
   reject_ = AddNewElement<UI::Widget::Button>(
       [this] { rejectFromTouch(); });
   reject_->SetText("Cancel");
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  // This is a genuine LVGL touch callback on the physical CST3530 display.
+  // No REST, MQTT or serial path can execute it.
+  labStart_ = AddNewElement<UI::Widget::Button>(
+      [this] { startEncryptedLabFromTouch(); });
+  labStart_->SetText("Start lab");
+  labStart_->SetSize(97, 34);
+  labStart_->AlignTo(this, LV_ALIGN_BOTTOM_LEFT, 6, -6);
+#endif
   reject_->SetSize(97, 34);
   reject_->AlignTo(this, LV_ALIGN_BOTTOM_RIGHT, -6, -6);
 
@@ -63,6 +86,9 @@ PairingPreviewPage::PairingPreviewPage(config_v2_pairing_policy::Entry entry)
 }
 
 PairingPreviewPage::~PairingPreviewPage() {
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  labProbe_.stop();
+#endif
   if (timer_) {
     lv_timer_del(timer_);
     timer_ = nullptr;
@@ -94,6 +120,10 @@ void PairingPreviewPage::approveFromTouch() {
 }
 
 void PairingPreviewPage::rejectFromTouch() {
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  labProbe_.stop();
+  if (labStart_) lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+#endif
   pairing_.cancel();
   cancelled_ = true;
   if (code_) code_->SetText("Cancelled");
@@ -105,6 +135,9 @@ void PairingPreviewPage::rejectFromTouch() {
 
 void PairingPreviewPage::refresh() {
   const auto now = millis();
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  labProbe_.tick(now);
+#endif
   const auto phase = pairing_.phase(now);
   if (phase == config_v2_pairing_policy::Phase::AwaitingTouch) {
     const auto *peer = pairing_.peerForLocalScreen(now);
@@ -128,7 +161,52 @@ void PairingPreviewPage::refresh() {
       if (code_) code_->SetText("Expired");
       if (status_) status_->SetText(
           "Pairing preview expired.\nNo settings changed.");
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+      labProbe_.stop();
+      if (labStart_) lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+#endif
     }
   }
 }
+
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+void PairingPreviewPage::startEncryptedLabFromTouch() {
+  // A local Settings touchscreen tap is required for every lab window.
+  // Reserve nonvolatile attempt budget *before* opening any network socket.
+  // This counts lab window openings, not individual SRP attempts: never
+  // deploy this as production pairing or claim brute-force protection.
+  if (cancelled_ || labProbe_.active() ||
+      pairing_.phase(millis()) != config_v2_pairing_policy::Phase::ShowCode)
+    return;
+  if (!WiFi.isConnected()) {
+    if (status_) status_->SetText("Connect Wi-Fi before starting the lab.");
+    return;
+  }
+  const std::string pin = pairing_.codeForLocalScreen(millis());
+  if (pin.size() != 6) return;
+  const auto reservation = labAttempts_.reserve(millis());
+  if (reservation != config_v2_pairing_attempt_budget::Status::Allowed) {
+    if (status_) status_->SetText(
+        "Lab attempt budget exhausted/invalid.\n"
+        "No network listener opened.\n"
+        "Do not erase NVS remotely.");
+    if (labStart_) lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
+  const bool started = labProbe_.startFromTrustedLocalTouch(
+      pin.data(), pin.size(), millis());
+  if (!started) {
+    if (status_) status_->SetText(
+        "Security2 lab listener failed.\n"
+        "No trust or config changed.");
+    return;
+  }
+  if (status_) status_->SetText(
+      "Encrypted LAB test port 18082.\n"
+      "Use official client + screen PIN.\n"
+      "Expires in 120 seconds.\n"
+      "NO PAIRING, NO DEPLOYMENT.");
+  if (labStart_) lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+}
+#endif
 #endif // Waveshare 2.8 V2 local-only pairing preview
