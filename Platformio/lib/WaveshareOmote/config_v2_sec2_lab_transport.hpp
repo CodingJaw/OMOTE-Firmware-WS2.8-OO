@@ -2,8 +2,9 @@
 // Isolated Security2 interoperability PROBE, never a production pairing server.
 //
 // Only compiled on Waveshare Config-v2 preview. The usable listener is
-// additionally guarded by OMOTE_CONFIG_V2_SEC2_LAB_PROBE, and has NO caller
-// in the application. Nothing starts on boot, HTTP or MQTT.
+// additionally guarded by OMOTE_CONFIG_V2_SEC2_LAB_PROBE. Only the LAB
+// Settings LVGL physical-touch callback can start it; nothing starts on boot,
+// HTTP, MQTT, or in ordinary firmware builds.
 //
 // LAB USE ONLY: A six-digit PIN is too weak without persistent per-attempt
 // limits. The transport MUST NOT be activated in production until persistent
