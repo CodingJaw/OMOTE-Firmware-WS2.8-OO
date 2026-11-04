@@ -73,7 +73,11 @@ class Security2LabBoundaryTests(unittest.TestCase):
         )
         self.assertIn("labProbe_.tick(now)", page)
         self.assertIn("labProbe_.stop()", page)
-        self.assertIn("config_v2_pairing_attempt_nvs::Store", header)
+        self.assertIn("config_v2_sec2_lab_budget::Store", header)
+        budget = (ROOT / "lib/WaveshareOmote/config_v2_sec2_lab_budget.cpp").read_text()
+        self.assertIn('kNamespace[] = "omsec2lab"', budget)
+        self.assertNotIn('kNamespace[] = "omotepair"', budget)
+        self.assertIn('nvs.getUInt(kCounter, UINT32_MAX) == next', budget)
         self.assertIn("config_v2_pairing_policy::Entry::SettingsTouch", settings)
         # The listener is never started from an HTTP/MQTT command or boot
         # hardware initialization. Default build omits its implementation.
