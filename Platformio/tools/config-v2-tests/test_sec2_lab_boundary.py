@@ -58,6 +58,33 @@ class Security2LabBoundaryTests(unittest.TestCase):
             self.assertNotIn(dangerous, SRC)
         self.assertIn("material_.clear()", SRC)
 
+    def test_only_physically_opened_settings_preview_can_start_lab(self):
+        page = (ROOT / "lib/BasicUI/page/PairingPreviewPage.cpp").read_text()
+        header = (ROOT / "lib/BasicUI/page/PairingPreviewPage.hpp").read_text()
+        settings = (ROOT / "lib/BasicUI/page/SettingsPage.cpp").read_text()
+        self.assertIn("#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)", page)
+        self.assertIn("AddNewElement<UI::Widget::Button>", page)
+        self.assertIn("[this] { startEncryptedLabFromTouch(); }", page)
+        self.assertIn("PairingPreviewPage::startEncryptedLabFromTouch()", page)
+        self.assertIn("labAttempts_.reserve(millis())", page)
+        self.assertLess(
+            page.index("labAttempts_.reserve(millis())"),
+            page.index("labProbe_.startFromTrustedLocalTouch("),
+        )
+        self.assertIn("labProbe_.tick(now)", page)
+        self.assertIn("labProbe_.stop()", page)
+        self.assertIn("config_v2_pairing_attempt_nvs::Store", header)
+        self.assertIn("config_v2_pairing_policy::Entry::SettingsTouch", settings)
+        # The listener is never started from an HTTP/MQTT command or boot
+        # hardware initialization. Default build omits its implementation.
+        for p in (
+            ROOT / "lib/WaveshareOmote/WaveshareHardware.cpp",
+            ROOT / "lib/esp32HalImpl/wifiHandler/config_http.cpp",
+            ROOT / "lib/BasicUI/BasicUI.cpp",
+        ):
+            self.assertNotIn("startEncryptedLabFromTouch", p.read_text(), p.name)
+            self.assertNotIn("startFromTrustedLocalTouch(", p.read_text(), p.name)
+
     def test_manual_client_does_not_take_pin_as_cli_argument(self):
         client = (Path(__file__).with_name("sec2_lab_client.py")).read_text()
         self.assertIn("getpass(", client)
