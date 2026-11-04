@@ -89,6 +89,26 @@ class Security2LabBoundaryTests(unittest.TestCase):
             self.assertNotIn("startEncryptedLabFromTouch", p.read_text(), p.name)
             self.assertNotIn("startFromTrustedLocalTouch(", p.read_text(), p.name)
 
+    def test_every_srp_frame_pays_persistent_quota_before_crypto(self):
+        header = (LIB / "config_v2_sec2_lab_transport.hpp").read_text()
+        budget = (LIB / "config_v2_sec2_lab_budget.cpp").read_text()
+        self.assertIn("gatedSecurityRequest(", SRC)
+        self.assertIn("gatedSecurityRequest(", header)
+        self.assertIn("&Probe::gatedSecurityRequest", SRC)
+        self.assertIn("boundedSecurity_.security_req_handler", SRC)
+        self.assertIn("&boundedSecurity_, &params", SRC)
+        before = SRC.index("lab->messageStore_.reserveSecurityMessage(")
+        after = SRC.index("return protocomm_security2.security_req_handler(")
+        self.assertLess(before, after)
+        self.assertIn("kMaximumMessages = 5", SRC)
+        self.assertIn('kSecMessageCounter[] = "secmsgs"', budget)
+        self.assertIn('kNamespace[] = "omsec2lab"', budget)
+        self.assertIn("nvs.putUInt(key, next)", budget)
+        self.assertIn("nvs.getUInt(key, UINT32_MAX) == next", budget)
+        self.assertNotIn("resetSecurityMessage", header)
+        self.assertIn("activeLab_ == this", SRC)
+        self.assertIn("esp_restart()", SRC)
+
     def test_manual_client_does_not_take_pin_as_cli_argument(self):
         client = (Path(__file__).with_name("sec2_lab_client.py")).read_text()
         self.assertIn("getpass(", client)
