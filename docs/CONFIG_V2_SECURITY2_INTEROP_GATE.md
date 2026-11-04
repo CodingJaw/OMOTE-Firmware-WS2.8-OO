@@ -66,6 +66,54 @@ fingerprint confirmation on the actual touchscreen, HA secure credential
 storage and revocation, reconnect and re-pairing. SHA-256 fingerprints or
 mDNS identifiers alone are *not* proof of identity.
 
+## Isolated encrypted interoperability probe (not paired; 2026-11-04)
+
+The firmware feature branch now contains `config_v2_sec2_lab_transport.*`.
+It uses Espressif's **real protocomm Security2 (SRP6a/AES-256-GCM)**
+with a short-lived, *separate* HTTPD service on TCP **18082**. It exposes
+only the official `prov-session` handshake endpoint, a harmless
+`proto-ver` scheme/patch-version endpoint, and one encrypted
+`omote-probe` endpoint exchanging the fixed strings
+`OMOTE-SEC2-PROBE-V1` and `OMOTE-SEC2-OK-V1`.
+
+**This is a laboratory compiler/interoperability target, not working
+product pairing:** there is no pairing UI callback yet. The executable
+listener is disabled in the ordinary Waveshare firmware build and requires
+the separate `waveshare28v2_omote_sec2_lab` environment. Even in that
+environment, nothing starts automatically or from network input:
+`Probe::startFromTrustedLocalTouch()` has no caller, and the code can
+only be activated in future work by a tested physical touchscreen action.
+It expires after at most two minutes if the local app calls `tick()`.
+The normal HTTP port 80 remains unchanged and read-only.
+
+No device identity, HA key-possession proof, persistent SRP attempt lockout,
+touchscreen approval, credential persistence or remote-write endpoint
+is implemented in this laboratory transport. A six-digit code is NOT
+sufficient protection for a production network service without those
+safeguards. **Do not flash the lab image as a production remote.**
+
+The manual reference client at
+`Platformio/tools/config-v2-tests/sec2_lab_client.py` calls Espressif's
+official Python `Security2` and `Transport_HTTP`. It reads a PIN using
+`getpass` (never CLI arguments), negotiates `prov-session`, sends a
+cryptographically encrypted test request and verifies the decrypted
+response. It deliberately cannot run against current dev firmware because
+the lab listener is not yet wired to an approved local screen gesture.
+When a physical entrypoint is added, its example invocation will be:
+
+```sh
+export IDF_PATH=/path/to/compatible/esp-idf
+python3 Platformio/tools/config-v2-tests/sec2_lab_client.py \
+  --host 10.0.10.121 --port 18082 --ack-lab-only
+```
+
+Only run this after a dedicated device-side lab build, verified full-flash
+USB backup, physical pairing window UI, and safe attempt-budget wiring.
+The user-selected final protocol also requires a stable device identity
+and an HA public-key possession challenge bound to the encrypted session,
+then a separate explicit on-device touchscreen confirmation of that peer.
+It is not yet safe to expose a "Pair" button in HACS.
+
 ## Security warning
 
 Espressif advisory GHSA-9r76-858f-v6jh (CVE-2026-45542, May 18, 2026)
