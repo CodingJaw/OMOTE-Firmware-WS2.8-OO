@@ -31,6 +31,23 @@
 namespace config_v2_sec2_lab_transport {
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
 Probe *Probe::activeLab_ = nullptr;
+
+namespace {
+// The bundled Arduino/ESP-IDF protocomm headers may omit patch_ver and
+// protocomm_get_sec_version(). Never rely on a newer function that might
+// not exist in the linked IDF binary. For a header without patch_ver, the
+// implementation follows the legacy Security2 nonce convention (patch 0).
+// A newer implementation exposes the actual value in its security object.
+template <typename Security>
+auto securityPatchVersion(const Security &security, int)
+    -> decltype(static_cast<std::uint8_t>(security.patch_ver)) {
+  return static_cast<std::uint8_t>(security.patch_ver);
+}
+template <typename Security>
+std::uint8_t securityPatchVersion(const Security &, long) {
+  return 0;
+}
+} // namespace
 #endif
 
 Probe::~Probe() { stop(); }
@@ -140,15 +157,14 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   }
   if (good) {
     char version[112] = {};
-    // Probe the *effective* registered security version rather than
-    // assuming the build's esp-idf struct exposes a patch_ver field.
-    // Refuse older patch levels: the Python AES-GCM reference client
-    // requires the v1 monotonic nonce-counter update.
-    int versionNumber = 0;
-    std::uint8_t patchNumber = 0;
-    const bool versionOk =
-        protocomm_get_sec_version(candidate, &versionNumber, &patchNumber) == ESP_OK &&
-        versionNumber == 2 && patchNumber == 1;
+    // The installed protocomm component is already bound to
+    // boundedSecurity_ above. Obtain the version from that actual object,
+    // not from an optional/unavailable IDF helper API. The Python client
+    // must use the same nonce-counter patch level (legacy 0, or patched 1).
+    const int versionNumber = boundedSecurity_.ver;
+    const std::uint8_t patchNumber = securityPatchVersion(boundedSecurity_, 0);
+    const bool versionOk = versionNumber == 2 &&
+                           (patchNumber == 0 || patchNumber == 1);
     const int n = versionOk ? std::snprintf(
         version, sizeof(version),
         "{\"prov\":{\"ver\":\"omote-sec2-lab-v1\",\"sec_patch_ver\":%u}}",
