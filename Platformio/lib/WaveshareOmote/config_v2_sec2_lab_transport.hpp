@@ -14,6 +14,7 @@
 #include "config_v2_sec2_srp_material.hpp"
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
 #include "config_v2_sec2_lab_budget.hpp"
+#include "config_v2_sec2_lab_device_identity.hpp"
 #endif
 #include "protocomm.h"
 #include "esp_err.h"
@@ -28,6 +29,7 @@ constexpr char kSessionEndpoint[] = "prov-session";
 constexpr char kVersionEndpoint[] = "proto-ver";
 constexpr char kProbeEndpoint[] = "omote-probe";
 constexpr char kCandidateProofEndpoint[] = "omote-ha-proof";
+constexpr char kDeviceProofEndpoint[] = "omote-device-proof";
 
 class Probe {
 public:
@@ -53,6 +55,9 @@ private:
       std::uint8_t **output, ssize_t *outLen, void *ctx);
 #endif
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  static esp_err_t deviceProofRequest(
+      std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+      std::uint8_t **output, ssize_t *outLen, void *ctx);
   static esp_err_t candidateProofRequest(
       std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
       std::uint8_t **output, ssize_t *outLen, void *ctx);
@@ -70,6 +75,7 @@ private:
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
   protocomm_security_t boundedSecurity_{};
   config_v2_sec2_lab_budget::Store messageStore_;
+  config_v2_sec2_lab_device_identity::Identity deviceIdentity_;
   static Probe *activeLab_;
 #endif
 };
