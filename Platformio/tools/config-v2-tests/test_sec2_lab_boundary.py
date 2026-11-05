@@ -96,6 +96,15 @@ class Security2LabBoundaryTests(unittest.TestCase):
         )
         self.assertIn("labProbe_.tick(now)", page)
         self.assertIn("labProbe_.stop()", page)
+        # A started lab listener keeps a visible, disabled on-screen marker.
+        # This must never become a second start action or reopen an NVS window.
+        self.assertIn('labStart_->SetText("Start lab")', page)
+        self.assertIn('labStart_->SetText("Lab active")', page)
+        self.assertIn('labStart_->SetText("Lab expired")', page)
+        self.assertIn('labStart_->SetText("Lab locked")', page)
+        self.assertIn('lv_obj_add_state(labStart_->LvglSelf(), LV_STATE_DISABLED)', page)
+        success = page.split('if (status_) status_->SetText(\n      "Encrypted LAB test port 18082.', 1)[1]
+        self.assertNotIn('lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN)', success)
         self.assertIn("config_v2_sec2_lab_budget::Store", header)
         budget = (ROOT / "lib/WaveshareOmote/config_v2_sec2_lab_budget.cpp").read_text()
         self.assertIn('kNamespace[] = "omsec2lab"', budget)
