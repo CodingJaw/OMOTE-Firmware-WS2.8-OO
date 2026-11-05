@@ -214,6 +214,70 @@ reviewing the log, because this lab permits only five persistent
 Security2 frames across reboots. The normal port-80 HACS API remains
 available independently.
 
+## Laboratory device software identity continuity (2026-11-05)
+
+The feature branch has a third **encrypted, unprivileged** lab endpoint,
+`POST /omote-device-proof`, in addition to the two previously proven
+encrypted interoperability probes. It is opt-in in the `sec2_lab`
+firmware environment only.
+
+The locally touched **Start lab** action now prepares a versioned P-256
+device **software** key. Its 98-byte NVS record is stored as a single
+key under `omsec2id/labkey` and consists of:
+`0x01 || 32-byte private scalar || 65-byte SEC1 uncompressed public key`.
+Existing keys are validated against their derived public key before
+they can be used; corrupted, truncated or wrong-version keys cause a
+fail-closed startup rather than silent key replacement. A newly created
+record is also verified through an immediate NVS readback. No network
+request can create or rotate the key, and the in-RAM scalar is wiped
+after the short-lived listener shuts down.
+
+**Security limitation: standard Waveshare NVS is not guaranteed encrypted.**
+Anyone able to read and duplicate the physical flash or a raw
+full-flash backup may recover the laboratory private key. This
+**cannot** establish a production-trusted hardware identity. Never
+rely on this proof to authorize configuration writes, HA access or
+OTA, and keep flash backups private. No eFuses are burned or
+irreversible hardware configuration changes made.
+
+The optional Python flag `--device-proof` sends
+`0x01 || 32-byte cryptographically random challenge` after the actual
+SRP6a/AES-GCM session is established. Firmware returns encrypted
+`0x01 || 65-byte device public key || u16 BE DER signature length ||
+DER ECDSA-SHA256 signature`. The signature covers exactly
+`"OMOTE-SEC2-LAB-DEVICE-PROOF-V1" || Security2-session-id-u32-BE ||
+challenge-32 || device-public-key-65`. The client checks the full
+signature and prints a **lab-only** lowercase SHA-256 fingerprint of the
+65-byte public key. The fingerprint is informational; HA does NOT
+automatically trust or pin it. The exact wire record and disabled
+authorization flags are pinned in
+`Platformio/tools/config-v2-tests/sec2_lab_device_identity_contract.json`
+and HACS CI.
+
+After the new version has **compiled and been reviewed**, a controlled
+follow-up (not an automatic reboot or new configuration deployment) can
+use the existing lab screen and **one** additional handshake:
+
+```sh
+cd Platformio
+python3 tools/config-v2-tests/sec2_lab_client.py \
+  --host 10.0.10.121 --port 18082 --ack-lab-only \
+  --ha-proof --device-proof
+```
+
+**Do not run this now merely to retest the previous two PASS stages.**
+The lab still charges a flash-persistent five-Security2-message budget
+that is never reset by reboot, so new testing must be coordinated.
+The previous hardware success for SRP6a, AES-GCM and candidate HA
+P-256 signatures remains valid.
+
+The production milestone following this LAB-only continuity test is
+properly protected private-key storage (eFuse-backed or appropriately
+encrypted NVS with an established device protection model), verified
+device provisioning/recovery, durable HA peer credentials and
+fresh touchscreen comparison/approval of both identities within the
+same authenticated session.
+
 ## Security warning
 
 Espressif advisory GHSA-9r76-858f-v6jh (CVE-2026-45542, May 18, 2026)
