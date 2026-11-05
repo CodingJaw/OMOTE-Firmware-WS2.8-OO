@@ -19,6 +19,7 @@
 #include <cstdio>
 
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+#include "config_v2_sec2_lab_peer_proof.hpp"
 #include "protocomm_httpd.h"
 #include "protocomm_security2.h"
 #include "esp_system.h"
@@ -82,6 +83,30 @@ esp_err_t Probe::probeRequest(std::uint32_t /*session*/,
   return ESP_OK;
 }
 
+esp_err_t Probe::candidateProofRequest(
+    std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+    std::uint8_t **output, ssize_t *outLen, void *ctx) {
+  auto *self = static_cast<Probe *>(ctx);
+  if (self == nullptr || !self->active() || input == nullptr ||
+      inLen <= 0 || output == nullptr || outLen == nullptr ||
+      static_cast<std::uint32_t>(millis() - self->startedAtMs_) >= kMaxWindowMs)
+    return ESP_ERR_INVALID_STATE;
+  // The protocomm endpoint decrypts via Security2 AES-GCM BEFORE calling
+  // here. Proof is bound to the same session_id as its encryption context.
+  if (!config_v2_sec2_lab_peer_proof::verifyCandidate(
+          session, input, static_cast<std::size_t>(inLen)))
+    return ESP_ERR_INVALID_ARG;
+  constexpr auto kBytes = sizeof(config_v2_sec2_lab_peer_proof::kResponse) - 1;
+  auto *reply = static_cast<std::uint8_t *>(std::malloc(kBytes));
+  if (!reply) return ESP_ERR_NO_MEM;
+  std::memcpy(reply, config_v2_sec2_lab_peer_proof::kResponse, kBytes);
+  *output = reply;
+  *outLen = kBytes;
+  // Deliberately NOT a pairing event: no peer is trusted, no NVS key is
+  // stored, and no configuration mutation is available.
+  return ESP_OK;
+}
+
 bool Probe::startFromTrustedLocalTouch(const char *pin,
                                       std::size_t len,
                                       std::uint32_t nowMs) {
@@ -134,6 +159,9 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   if (good)
     good = protocomm_add_endpoint(
         candidate, kProbeEndpoint, probeRequest, this) == ESP_OK;
+  if (good)
+    good = protocomm_add_endpoint(
+        candidate, kCandidateProofEndpoint, candidateProofRequest, this) == ESP_OK;
 
   if (!good) {
     // Never wipe salt/verifier while Security2 might still be using them.
