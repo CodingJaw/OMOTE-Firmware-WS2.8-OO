@@ -44,11 +44,14 @@ class Security2LabBoundaryTests(unittest.TestCase):
             if p.suffix in (".cpp", ".hpp", ".h"):
                 self.assertNotIn("startFromTrustedLocalTouch", p.read_text(), p.name)
 
-    def test_lab_has_only_two_no_secret_encrypted_endpoints(self):
+    def test_lab_has_only_three_unprivileged_encrypted_endpoints(self):
         self.assertIn('kSessionEndpoint[] = "prov-session"', HEADER)
         self.assertIn('kProbeEndpoint[] = "omote-probe"', HEADER)
-        self.assertEqual(SRC.count("protocomm_add_endpoint("), 2)
+        self.assertEqual(SRC.count("protocomm_add_endpoint("), 3)
         self.assertIn('kCandidateProofEndpoint[] = "omote-ha-proof"', HEADER)
+        self.assertIn('kDeviceProofEndpoint[] = "omote-device-proof"', HEADER)
+        self.assertIn('candidate, kDeviceProofEndpoint, deviceProofRequest, this', SRC)
+        self.assertIn("deviceIdentity_.signSessionChallenge(", SRC)
         self.assertIn('candidate, kCandidateProofEndpoint, candidateProofRequest, this', SRC)
         self.assertIn('verifyCandidate(', SRC)
         self.assertIn("protocomm_set_security(", SRC)
@@ -65,6 +68,19 @@ class Security2LabBoundaryTests(unittest.TestCase):
         ):
             self.assertNotIn(dangerous, SRC)
         self.assertIn("material_.clear()", SRC)
+        self.assertIn("deviceIdentity_.prepareFromTrustedLocalTouch()", SRC)
+        self.assertIn("deviceIdentity_.clear()", SRC)
+        identity = (LIB / "config_v2_sec2_lab_device_identity.cpp").read_text()
+        self.assertIn('kNamespace[] = "omsec2id"', identity)
+        self.assertIn('kRecordKey[] = "labkey"', identity)
+        self.assertIn("storage.putBytes(kRecordKey,", identity)
+        self.assertIn("storage.getBytesLength(kRecordKey)", identity)
+        self.assertIn("validate(verifier, check)", identity)
+        self.assertIn("mbedtls_ecp_check_privkey(", identity)
+        self.assertIn("mbedtls_ecp_mul(", identity)
+        self.assertIn("mbedtls_ecdsa_write_signature(", identity)
+        self.assertNotIn("esp_efuse_write", identity)
+        self.assertNotIn("replaceAfterAuthenticatedPhysicalApproval", identity)
         verifier = (LIB / "config_v2_sec2_lab_peer_proof.cpp").read_text()
         contract = (LIB / "config_v2_sec2_lab_peer_proof.hpp").read_text()
         self.assertIn("mbedtls_ecdsa_read_signature(", verifier)
@@ -174,6 +190,9 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertIn('make_candidate_proof(cookie)', client)
         self.assertIn('sec.encrypt_data(proof)', client)
         self.assertIn('check_lab_reply(plaintext)', client)
+        self.assertIn("--device-proof", client)
+        self.assertIn('verify_device_proof(cookie, challenge, plaintext)', client)
+        self.assertIn('"omote-device-proof"', client)
 
 
 if __name__ == "__main__":
