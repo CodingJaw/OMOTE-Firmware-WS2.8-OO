@@ -6,6 +6,7 @@ They are NOT proofs of actual cryptographic interoperability on hardware.
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -124,6 +125,22 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertNotIn("resetSecurityMessage", header)
         self.assertIn("activeLab_ == this", SRC)
         self.assertIn("esp_restart()", SRC)
+
+    def test_shared_candidate_proof_wire_contract(self):
+        spec = json.loads(
+            (Path(__file__).with_name("sec2_lab_ha_proof_contract.json")).read_text()
+        )
+        req = spec["request"]
+        self.assertEqual(spec["transport"]["endpoint"], "omote-ha-proof")
+        self.assertEqual(spec["transport"]["port"], 18082)
+        self.assertTrue(spec["transport"]["must_be_inside_completed_encrypted_security2_session"])
+        self.assertEqual(req["version"], 1)
+        self.assertEqual(req["header_bytes"], 100)
+        self.assertEqual(req["signature_max_bytes"], 80)
+        self.assertIn(req["domain"], (LIB / "config_v2_sec2_lab_peer_proof.hpp").read_text())
+        self.assertIn(spec["response"]["authenticated_encrypted_payload_ascii"],
+                      (LIB / "config_v2_sec2_lab_peer_proof.hpp").read_text())
+        self.assertTrue(all(v is False for v in spec["authorization"].values()))
 
     def test_manual_client_does_not_take_pin_as_cli_argument(self):
         client = (Path(__file__).with_name("sec2_lab_client.py")).read_text()
