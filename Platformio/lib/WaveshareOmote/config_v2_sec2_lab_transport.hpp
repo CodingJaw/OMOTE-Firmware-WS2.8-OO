@@ -63,6 +63,9 @@ private:
                           void *ctx);
   protocomm_t *pc_ = nullptr;
   config_v2_sec2_srp_material::Ephemeral material_;
+  // protocomm_set_security borrows this whole struct for the duration of
+  // the listener. It must never point into a function-local stack frame.
+  protocomm_security2_params_t securityParams_{};
   std::uint32_t startedAtMs_ = 0;
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
   protocomm_security_t boundedSecurity_{};
