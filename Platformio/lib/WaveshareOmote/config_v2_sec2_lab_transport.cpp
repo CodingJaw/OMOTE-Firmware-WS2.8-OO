@@ -12,6 +12,7 @@
 // the lab flag in production firmware.
 #if defined(OMOTE_WAVESHARE28V2) && defined(OMOTE_CONFIG_V2_PREVIEW)
 #include "config_v2_sec2_lab_transport.hpp"
+#include <Arduino.h>  // millis(): monotonic lab-window expiry on the ESP32
 
 #include <cstdlib>
 #include <cstring>
@@ -113,11 +114,21 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   }
   if (good) {
     char version[112] = {};
-    const int n = std::snprintf(
+    // Probe the *effective* registered security version rather than
+    // assuming the build's esp-idf struct exposes a patch_ver field.
+    // Refuse older patch levels: the Python AES-GCM reference client
+    // requires the v1 monotonic nonce-counter update.
+    int versionNumber = 0;
+    std::uint8_t patchNumber = 0;
+    const bool versionOk =
+        protocomm_get_sec_version(candidate, &versionNumber, &patchNumber) == ESP_OK &&
+        versionNumber == 2 && patchNumber == 1;
+    const int n = versionOk ? std::snprintf(
         version, sizeof(version),
         "{\"prov\":{\"ver\":\"omote-sec2-lab-v1\",\"sec_patch_ver\":%u}}",
-        static_cast<unsigned>(protocomm_security2.patch_ver));
-    good = n > 0 && static_cast<std::size_t>(n) < sizeof(version) &&
+        static_cast<unsigned>(patchNumber)) : -1;
+    good = versionOk && n > 0 &&
+           static_cast<std::size_t>(n) < sizeof(version) &&
            protocomm_set_version(candidate, kVersionEndpoint, version) == ESP_OK;
   }
   if (good)
