@@ -49,7 +49,7 @@ PairingPreviewPage::PairingPreviewPage(config_v2_pairing_policy::Entry entry)
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
   status_->SetText(
       "Local-only encrypted test.\n"
-      "Tap Start test to open the\n"
+      "Tap Start lab to open the\n"
       "short-lived lab listener.\n"
       "NOT a trusted pairing.");
 #endif
@@ -163,7 +163,10 @@ void PairingPreviewPage::refresh() {
           "Pairing preview expired.\nNo settings changed.");
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
       labProbe_.stop();
-      if (labStart_) lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+      if (labStart_) {
+        labStart_->SetText("Lab expired");
+        lv_obj_add_state(labStart_->LvglSelf(), LV_STATE_DISABLED);
+      }
 #endif
     }
   }
@@ -190,7 +193,10 @@ void PairingPreviewPage::startEncryptedLabFromTouch() {
         "Lab attempt budget exhausted/invalid.\n"
         "No network listener opened.\n"
         "Do not erase NVS remotely.");
-    if (labStart_) lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+    if (labStart_) {
+      labStart_->SetText("Lab locked");
+      lv_obj_add_state(labStart_->LvglSelf(), LV_STATE_DISABLED);
+    }
     return;
   }
   const bool started = labProbe_.startFromTrustedLocalTouch(
@@ -199,6 +205,10 @@ void PairingPreviewPage::startEncryptedLabFromTouch() {
     if (status_) status_->SetText(
         "Security2 lab listener failed.\n"
         "No trust or config changed.");
+    if (labStart_) {
+      labStart_->SetText("Start failed");
+      lv_obj_add_state(labStart_->LvglSelf(), LV_STATE_DISABLED);
+    }
     return;
   }
   if (status_) status_->SetText(
@@ -206,7 +216,13 @@ void PairingPreviewPage::startEncryptedLabFromTouch() {
       "Use official client + screen PIN.\n"
       "Expires in 120 seconds.\n"
       "NO PAIRING, NO DEPLOYMENT.");
-  if (labStart_) lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+  // Preserve visible feedback after activation. Previously this button was
+  // hidden immediately, leaving no visible indication that Start lab worked.
+  // Disabling it prevents duplicate listener opens or additional NVS charges.
+  if (labStart_) {
+    labStart_->SetText("Lab active");
+    lv_obj_add_state(labStart_->LvglSelf(), LV_STATE_DISABLED);
+  }
 }
 #endif
 #endif // Waveshare 2.8 V2 local-only pairing preview
