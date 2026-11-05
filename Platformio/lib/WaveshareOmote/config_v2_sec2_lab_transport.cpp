@@ -7,9 +7,10 @@
 // public Arduino WebServer remains read-only and on its original port 80.
 //
 // This is an encrypted-interoperability *probe*, not secure device pairing.
-// Candidate HA P-256 key possession is checked in one unprivileged endpoint,
-// but there is NO persistent trusted identity, device key proof, touchscreen
-// approval, credential storage or privileged endpoint. Do NOT enable
+// Candidate HA and laboratory device P-256 key-possession proofs are
+// unprivileged encrypted endpoints. The lab device key is persistent NVS
+// SOFTWARE material, not a protected or trusted production identity. There
+// is NO touchscreen peer approval, HA trust, or privileged endpoint. Do NOT enable
 // the lab flag in production firmware.
 #if defined(OMOTE_WAVESHARE28V2) && defined(OMOTE_CONFIG_V2_PREVIEW)
 #include "config_v2_sec2_lab_transport.hpp"
