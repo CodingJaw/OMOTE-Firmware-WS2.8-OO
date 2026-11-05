@@ -17,6 +17,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <array>
 #include <cstdio>
 
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
@@ -101,6 +102,35 @@ esp_err_t Probe::probeRequest(std::uint32_t /*session*/,
   return ESP_OK;
 }
 
+esp_err_t Probe::deviceProofRequest(
+    std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+    std::uint8_t **output, ssize_t *outLen, void *ctx) {
+  auto *self = static_cast<Probe *>(ctx);
+  if (self == nullptr || !self->active() || !self->deviceIdentity_.ready() ||
+      input == nullptr || output == nullptr || outLen == nullptr ||
+      inLen != static_cast<ssize_t>(
+          config_v2_sec2_lab_device_identity::kRequestBytes) ||
+      static_cast<std::uint32_t>(millis() - self->startedAtMs_) >= kMaxWindowMs)
+    return ESP_ERR_INVALID_STATE;
+  // Called only AFTER AES-GCM decryption by protocomm. This signature
+  // demonstrates possession of a laboratory NVS software key only. It
+  // conveys NO trusted-device status or configuration privileges.
+  std::array<std::uint8_t,
+      config_v2_sec2_lab_device_identity::kReplyHeaderBytes +
+      config_v2_sec2_lab_device_identity::kMaxSignatureBytes> buffer{};
+  std::size_t bytes = 0;
+  if (!self->deviceIdentity_.signSessionChallenge(
+          session, input, static_cast<std::size_t>(inLen),
+          buffer.data(), buffer.size(), bytes))
+    return ESP_ERR_INVALID_ARG;
+  auto *reply = static_cast<std::uint8_t *>(std::malloc(bytes));
+  if (!reply) return ESP_ERR_NO_MEM;
+  std::memcpy(reply, buffer.data(), bytes);
+  *output = reply;
+  *outLen = static_cast<ssize_t>(bytes);
+  return ESP_OK;
+}
+
 esp_err_t Probe::candidateProofRequest(
     std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
     std::uint8_t **output, ssize_t *outLen, void *ctx) {
@@ -129,10 +159,17 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
                                       std::size_t len,
                                       std::uint32_t nowMs) {
   if (active() || activeLab_ != nullptr) return false;
-  if (!material_.generate(pin, len)) return false;
+  // The ONLY identity provisioning entrypoint is this physical touch path.
+  // Never create or replace a device key from a network endpoint.
+  if (!deviceIdentity_.prepareFromTrustedLocalTouch()) return false;
+  if (!material_.generate(pin, len)) {
+    deviceIdentity_.clear();
+    return false;
+  }
   protocomm_t *candidate = protocomm_new();
   if (!candidate) {
     material_.clear();
+    deviceIdentity_.clear();
     return false;
   }
 
@@ -181,6 +218,9 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   if (good)
     good = protocomm_add_endpoint(
         candidate, kCandidateProofEndpoint, candidateProofRequest, this) == ESP_OK;
+  if (good)
+    good = protocomm_add_endpoint(
+        candidate, kDeviceProofEndpoint, deviceProofRequest, this) == ESP_OK;
 
   if (!good) {
     // Never wipe salt/verifier while Security2 might still be using them.
@@ -194,6 +234,7 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
     protocomm_delete(candidate);
     activeLab_ = nullptr;
     material_.clear();
+    deviceIdentity_.clear();
     return false;
   }
   pc_ = candidate;
@@ -211,6 +252,7 @@ void Probe::stop() {
   if (!pc_) {
     if (activeLab_ == this) activeLab_ = nullptr;
     material_.clear();
+    deviceIdentity_.clear();
     return;
   }
   // Do not delete the Security2 instance or its borrowed SRP buffers until
@@ -227,6 +269,7 @@ void Probe::stop() {
   pc_ = nullptr;
   if (activeLab_ == this) activeLab_ = nullptr;
   material_.clear();
+  deviceIdentity_.clear();
 }
 
 #else  // Lab transport explicitly disabled in normal firmware
