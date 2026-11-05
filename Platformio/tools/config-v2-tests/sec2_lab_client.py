@@ -22,6 +22,7 @@ import re
 import sys
 
 from sec2_lab_ha_proof import make_candidate_proof, check_lab_reply
+from sec2_lab_device_proof import make_challenge, verify_device_proof
 
 
 class LabSetupError(RuntimeError):
@@ -45,6 +46,7 @@ _HINTS = {
     "srp-handshake": "Security2 negotiation failed. Stop here: failed SRP frames consume the persistent five-message lab quota, including across reboots.",
     "encrypted-probe": "SRP may have completed but AES-GCM probe verification failed. Do not claim pairing success.",
     "ha-key-proof": "The optional P-256 candidate-key proof failed. It is not production pairing.",
+    "device-key-proof": "The experimental device software key proof failed. Do not pin or trust this key.",
 }
 
 
@@ -104,7 +106,9 @@ def _official_provisioning_modules():
     return Security2, Transport_HTTP
 
 
-async def probe(host: str, port: int, *, ha_proof: bool = False) -> None:
+async def probe(
+    host: str, port: int, *, ha_proof: bool = False, device_proof: bool = False
+) -> None:
     Security2, Transport_HTTP = _official_provisioning_modules()
     stage = "connect"
     tp = None
@@ -163,7 +167,21 @@ async def probe(host: str, port: int, *, ha_proof: bool = False) -> None:
             check_lab_reply(plaintext)
             print("PASS: ephemeral HA P-256 private-key possession proved inside encrypted session.")
 
-        print("No permanent device/HA identity, pairing trust, or configuration writes were tested.")
+        if device_proof:
+            stage = "device-key-proof"
+            cookie = tp.headers.get("Cookie", "")
+            challenge = make_challenge()
+            ciphertext = sec.encrypt_data(challenge)
+            response = await tp.send_data(
+                "omote-device-proof", ciphertext.decode("latin-1")
+            )
+            plaintext = sec.decrypt_data(response.encode("latin-1"))
+            fingerprint = verify_device_proof(cookie, challenge, plaintext)
+            print("PASS: encrypted lab device P-256 software-key possession proof.")
+            print(f"LAB ONLY device public-key SHA-256 fingerprint: {fingerprint}")
+            print("This lab software key may be extractable from unencrypted NVS; "
+                  "do NOT mark the remote trusted.")
+        print("No production device/HA identity, pairing trust, or configuration writes were tested.")
     except Exception as exc:
         raise LabProbeError(stage, type(exc).__name__) from None
     finally:
@@ -177,6 +195,8 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=18082)
     ap.add_argument("--ha-proof", action="store_true",
                     help="Also verify ephemeral HA P-256 key possession (NOT trusted pairing)")
+    ap.add_argument("--device-proof", action="store_true",
+                    help="Also verify LAB software device-key possession (NOT trusted identity)")
     ap.add_argument("--ack-lab-only", action="store_true",
                     help="Acknowledge this is NOT authenticated OMOTE pairing")
     ap.add_argument("--check-prereqs", action="store_true",
@@ -205,7 +225,10 @@ def main() -> int:
         ap.error("Invalid lab port")
 
     try:
-        asyncio.run(probe(args.host, args.port, ha_proof=args.ha_proof))
+        asyncio.run(probe(
+            args.host, args.port,
+            ha_proof=args.ha_proof, device_proof=args.device_proof,
+        ))
     except LabSetupError as exc:
         print(f"FAIL [prerequisites]: {exc}", file=sys.stderr)
         return 2
