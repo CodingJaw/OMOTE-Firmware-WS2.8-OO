@@ -131,6 +131,52 @@ and an HA public-key possession challenge bound to the encrypted session,
 then a separate explicit on-device touchscreen confirmation of that peer.
 It is not yet safe to expose a "Pair" button in HACS.
 
+## Encrypted HA candidate-key proof (2026-11-04)
+
+The next layer on the isolated lab build is an **encrypted, unprivileged
+candidate HA public-key-possession proof**:
+
+- After the real Security2 `prov-session` handshake, the optional reference
+  client creates an **ephemeral** P-256 keypair and cryptographically signs
+  `"OMOTE-SEC2-LAB-HA-PROOF-V1" || Security2_session_id_u32_BE ||
+  public_key_SEC1_65 || fresh_client_nonce_32` using ECDSA/SHA-256.
+  The private key never leaves the Python process and is not persisted.
+- The payload is delivered only through encrypted
+  `POST /omote-ha-proof` on isolated TCP 18082. The firmware verifies a
+  valid uncompressed P-256 public point, exact binary frame length, DER
+  signature, fresh transcript nonce and the **current Security2 session
+  identifier** before returning the fixed encrypted receipt
+  `OMOTE-LAB-HA-PROOF-OK-V1`.
+- Replaying the signature in another Security2 session or altering the
+  signed public key, nonce or version should fail. The existing per-message
+  NVS quota remains in front of the SRP handshake.
+- The exact framing, domain separator, endpoint and authorization flags are
+  pinned in `Platformio/tools/config-v2-tests/sec2_lab_ha_proof_contract.json`.
+  HACS `main` compares this contract in its CI. This is a **contract check
+  only**; HACS does not yet connect to this experimental endpoint.
+
+Optional invocation after intentionally flashing the lab environment,
+making a verified full-flash USB backup and physically tapping
+**Settings → SEC2 encrypted LAB test → Start lab**:
+
+```sh
+export IDF_PATH=/path/to/compatible/esp-idf
+python3 Platformio/tools/config-v2-tests/sec2_lab_client.py \
+  --host 10.0.10.121 --port 18082 --ack-lab-only --ha-proof
+```
+
+Successful output indicates encrypted SRP6a/AES-GCM communication and
+possession of the **candidate** client's ephemeral private key. It does NOT
+establish a persistent authenticated device identity or trusted HA
+installation. It does not authorize any commands, config deployment,
+credential writes, or firmware update. A production protocol must next
+prove and pin a long-lived device key, prove the real HA key, bind both
+to the PAKE transcript, require fresh touchscreen approval of the exact
+HA peer fingerprint, and durably save/revoke trust through protected
+storage. The lab's current 5-frame limit allows at most two ordinary
+handshakes before it blocks additional attempts; it has no approved
+physical reset mechanism yet.
+
 ## Security warning
 
 Espressif advisory GHSA-9r76-858f-v6jh (CVE-2026-45542, May 18, 2026)
