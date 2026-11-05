@@ -28,8 +28,10 @@ from pathlib import Path
 import re
 import sys
 
+from sec2_lab_ha_proof import make_candidate_proof, check_lab_reply
 
-async def probe(host: str, port: int) -> None:
+
+async def probe(host: str, port: int, *, ha_proof: bool = False) -> None:
     idf_path = Path(os.environ.get("IDF_PATH", "")).expanduser()
     if not idf_path.is_dir():
         raise RuntimeError("IDF_PATH must point to a local Espressif ESP-IDF checkout")
@@ -84,7 +86,18 @@ async def probe(host: str, port: int) -> None:
         if decrypted != b"OMOTE-SEC2-OK-V1":
             raise RuntimeError("Authenticated encrypted probe response mismatch")
         print("PASS: Security2 SRP6a session and AES-GCM encrypted probe.")
-        print("No device identity, pairing trust, HA keys or configuration writes were tested.")
+        if ha_proof:
+            # The cookie was issued by the ESP-IDF Security2 HTTP transport.
+            # Never trust it as an identity; use only as an additional
+            # transcript/session binding for the ephemeral candidate proof.
+            cookie = tp.headers.get("Cookie", "")
+            proof = make_candidate_proof(cookie)
+            ciphertext = sec.encrypt_data(proof)
+            response = await tp.send_data("omote-ha-proof", ciphertext.decode("latin-1"))
+            plaintext = sec.decrypt_data(response.encode("latin-1"))
+            check_lab_reply(plaintext)
+            print("PASS: ephemeral HA P-256 private-key possession proved inside encrypted session.")
+        print("No permanent device/HA identity, pairing trust, or configuration writes were tested.")
     finally:
         tp.conn.close()
 
@@ -93,6 +106,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--host", required=True, help="Lab Waveshare IPv4 address")
     ap.add_argument("--port", type=int, default=18082)
+    ap.add_argument("--ha-proof", action="store_true",
+                    help="Also verify ephemeral HA P-256 key possession (NOT trusted pairing)")
     ap.add_argument("--ack-lab-only", action="store_true",
                     help="Acknowledge this is NOT authenticated OMOTE pairing")
     args = ap.parse_args()
@@ -105,7 +120,7 @@ def main() -> int:
     if not 1 <= args.port <= 65535:
         ap.error("Invalid lab port")
     try:
-        asyncio.run(probe(args.host, args.port))
+        asyncio.run(probe(args.host, args.port, ha_proof=args.ha_proof))
     except Exception as exc:
         # Never print a remote response body, cryptographic secret or PIN.
         print(f"FAIL: interoperability probe aborted ({type(exc).__name__}).",
