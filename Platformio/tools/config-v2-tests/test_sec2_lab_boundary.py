@@ -43,10 +43,13 @@ class Security2LabBoundaryTests(unittest.TestCase):
             if p.suffix in (".cpp", ".hpp", ".h"):
                 self.assertNotIn("startFromTrustedLocalTouch", p.read_text(), p.name)
 
-    def test_lab_has_only_one_no_secret_encrypted_endpoint(self):
+    def test_lab_has_only_two_no_secret_encrypted_endpoints(self):
         self.assertIn('kSessionEndpoint[] = "prov-session"', HEADER)
         self.assertIn('kProbeEndpoint[] = "omote-probe"', HEADER)
-        self.assertEqual(SRC.count("protocomm_add_endpoint("), 1)
+        self.assertEqual(SRC.count("protocomm_add_endpoint("), 2)
+        self.assertIn('kCandidateProofEndpoint[] = "omote-ha-proof"', HEADER)
+        self.assertIn('candidate, kCandidateProofEndpoint, candidateProofRequest, this', SRC)
+        self.assertIn('verifyCandidate(', SRC)
         self.assertIn("protocomm_set_security(", SRC)
         self.assertIn("boundedSecurity_ = protocomm_security2;", SRC)
         self.assertIn("boundedSecurity_.security_req_handler = &Probe::gatedSecurityRequest;", SRC)
@@ -59,6 +62,15 @@ class Security2LabBoundaryTests(unittest.TestCase):
         ):
             self.assertNotIn(dangerous, SRC)
         self.assertIn("material_.clear()", SRC)
+        verifier = (LIB / "config_v2_sec2_lab_peer_proof.cpp").read_text()
+        contract = (LIB / "config_v2_sec2_lab_peer_proof.hpp").read_text()
+        self.assertIn("mbedtls_ecdsa_read_signature(", verifier)
+        self.assertIn("mbedtls_ecp_check_pubkey(", verifier)
+        self.assertIn("authenticatedSec2Session >> 24", verifier)
+        self.assertIn("OMOTE-SEC2-LAB-HA-PROOF-V1", contract)
+        self.assertIn("OMOTE-LAB-HA-PROOF-OK-V1", contract)
+        self.assertNotIn("Preferences", verifier)
+        self.assertNotIn("replaceAfterAuthenticatedPhysicalApproval", verifier)
         self.assertIn("protocomm_get_sec_version(", SRC)
         self.assertIn("versionNumber == 2 && patchNumber == 1", SRC)
 
@@ -122,6 +134,10 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertNotIn('ap.add_argument("--pin"', client)
         self.assertNotIn("verbose=True", client)
         self.assertIn("--ack-lab-only", client)
+        self.assertIn("--ha-proof", client)
+        self.assertIn('make_candidate_proof(cookie)', client)
+        self.assertIn('sec.encrypt_data(proof)', client)
+        self.assertIn('check_lab_reply(plaintext)', client)
 
 
 if __name__ == "__main__":
