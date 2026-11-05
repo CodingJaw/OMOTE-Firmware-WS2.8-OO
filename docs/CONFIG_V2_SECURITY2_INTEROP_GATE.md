@@ -177,6 +177,43 @@ storage. The lab's current 5-frame limit allows at most two ordinary
 handshakes before it blocks additional attempts; it has no approved
 physical reset mechanism yet.
 
+## Security2 lab client prerequisites and safe diagnostics
+
+If `sec2_lab_client.py` prints only
+`FAIL: interoperability probe aborted (RuntimeError)`, that was an
+older client hiding the exception's **stage**. Before opening another
+lab window or spending the flash-persistent `omsec2lab/secmsgs` limit,
+update the firmware repository and run:
+
+```sh
+cd Platformio
+python3 tools/config-v2-tests/sec2_lab_client.py --check-prereqs
+```
+
+This test has **no network access or device-side effect**. It verifies
+`IDF_PATH` explicitly points to a compatible **source checkout of
+Espressif's ESP-IDF** with `tools/esp_prov`, generated protobuf modules
+and Python dependencies. PlatformIO firmware compilation alone does
+not configure this host-side provisioning client.
+
+When `IDF_PATH` is missing, locate an existing ESP-IDF source checkout
+or obtain one for the compatible firmware version; set, for example,
+`export IDF_PATH="$HOME/esp-idf"`. Do not point it at the OMOTE
+repository. Install the checkout's required Python packages in an
+isolated Python environment. Repeat `--check-prereqs` until it prints
+PASS **before** starting a lab window.
+
+The updated client now reports the failing stage without exposing
+PINs, server bodies, or cryptographic material:
+`[prerequisites]`, `[connect]`, `[protocol-version]`,
+`[validate-version]`, `[local-pin]`, `[srp-handshake]`,
+`[encrypted-probe]`, `[ha-key-proof]`. A failure before the
+`srp-handshake` stage does not spend the lab's Security2 message
+quota. Do **not** repeatedly retry a failed SRP handshake without
+reviewing the log, because this lab permits only five persistent
+Security2 frames across reboots. The normal port-80 HACS API remains
+available independently.
+
 ## Security warning
 
 Espressif advisory GHSA-9r76-858f-v6jh (CVE-2026-45542, May 18, 2026)
