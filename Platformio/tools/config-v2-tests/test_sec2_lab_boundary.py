@@ -54,7 +54,9 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertIn("protocomm_set_security(", SRC)
         self.assertIn("boundedSecurity_ = protocomm_security2;", SRC)
         self.assertIn("boundedSecurity_.security_req_handler = &Probe::gatedSecurityRequest;", SRC)
-        self.assertIn("&boundedSecurity_, &params", SRC)
+        self.assertIn("&boundedSecurity_, &securityParams_", SRC)
+        self.assertIn("securityParams_ = material_.params()", SRC)
+        self.assertIn("protocomm_security2_params_t securityParams_", HEADER)
         self.assertIn('static constexpr char kReply[] = "OMOTE-SEC2-OK-V1"', SRC)
         for dangerous in (
             "handleFsWrite", "handleFsDelete", "/api/device/settings",
@@ -72,8 +74,11 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertIn("OMOTE-LAB-HA-PROOF-OK-V1", contract)
         self.assertNotIn("Preferences", verifier)
         self.assertNotIn("replaceAfterAuthenticatedPhysicalApproval", verifier)
-        self.assertIn("protocomm_get_sec_version(", SRC)
-        self.assertIn("versionNumber == 2 && patchNumber == 1", SRC)
+        self.assertNotIn("protocomm_get_sec_version(", SRC)
+        self.assertIn("securityPatchVersion(boundedSecurity_, 0)", SRC)
+        self.assertIn("return 0;", SRC)
+        self.assertIn("versionNumber == 2", SRC)
+        self.assertIn("patchNumber == 0 || patchNumber == 1", SRC)
 
     def test_only_physically_opened_settings_preview_can_start_lab(self):
         page = (ROOT / "lib/BasicUI/page/PairingPreviewPage.cpp").read_text()
@@ -152,6 +157,8 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertNotIn("verbose=True", client)
         self.assertIn("--ack-lab-only", client)
         self.assertIn("--ha-proof", client)
+        self.assertIn('details["sec_patch_ver"] not in (0, 1)', client)
+        self.assertIn('sec_patch_ver=details["sec_patch_ver"]', client)
         self.assertIn('make_candidate_proof(cookie)', client)
         self.assertIn('sec.encrypt_data(proof)', client)
         self.assertIn('check_lab_reply(plaintext)', client)
