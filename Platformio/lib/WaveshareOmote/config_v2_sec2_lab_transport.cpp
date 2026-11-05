@@ -151,9 +151,11 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   bool good = protocomm_httpd_start(candidate, &config) == ESP_OK;
   if (good) {
     started = true;
-    const auto params = material_.params();
+    // protocomm borrows the params pointer until HTTPD is fully stopped.
+    // Keep BOTH the struct and its salt/verifier allocations alive in Probe.
+    securityParams_ = material_.params();
     good = protocomm_set_security(
-        candidate, kSessionEndpoint, &boundedSecurity_, &params) == ESP_OK;
+        candidate, kSessionEndpoint, &boundedSecurity_, &securityParams_) == ESP_OK;
   }
   if (good) {
     char version[112] = {};
