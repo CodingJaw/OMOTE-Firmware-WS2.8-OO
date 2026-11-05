@@ -27,6 +27,7 @@ constexpr std::uint32_t kMaxWindowMs = 120000;
 constexpr char kSessionEndpoint[] = "prov-session";
 constexpr char kVersionEndpoint[] = "proto-ver";
 constexpr char kProbeEndpoint[] = "omote-probe";
+constexpr char kCandidateProofEndpoint[] = "omote-ha-proof";
 
 class Probe {
 public:
@@ -49,6 +50,11 @@ private:
       protocomm_security_handle_t handle, const void *params,
       std::uint32_t session,
       const std::uint8_t *input, ssize_t inLen,
+      std::uint8_t **output, ssize_t *outLen, void *ctx);
+#endif
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  static esp_err_t candidateProofRequest(
+      std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
       std::uint8_t **output, ssize_t *outLen, void *ctx);
 #endif
   static esp_err_t probeRequest(std::uint32_t session,
