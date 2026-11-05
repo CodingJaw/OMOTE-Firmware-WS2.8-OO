@@ -48,7 +48,9 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertIn('kProbeEndpoint[] = "omote-probe"', HEADER)
         self.assertEqual(SRC.count("protocomm_add_endpoint("), 1)
         self.assertIn("protocomm_set_security(", SRC)
-        self.assertIn("&protocomm_security2", SRC)
+        self.assertIn("boundedSecurity_ = protocomm_security2;", SRC)
+        self.assertIn("boundedSecurity_.security_req_handler = &Probe::gatedSecurityRequest;", SRC)
+        self.assertIn("&boundedSecurity_, &params", SRC)
         self.assertIn('static constexpr char kReply[] = "OMOTE-SEC2-OK-V1"', SRC)
         for dangerous in (
             "handleFsWrite", "handleFsDelete", "/api/device/settings",
@@ -57,6 +59,8 @@ class Security2LabBoundaryTests(unittest.TestCase):
         ):
             self.assertNotIn(dangerous, SRC)
         self.assertIn("material_.clear()", SRC)
+        self.assertIn("protocomm_get_sec_version(", SRC)
+        self.assertIn("versionNumber == 2 && patchNumber == 1", SRC)
 
     def test_only_physically_opened_settings_preview_can_start_lab(self):
         page = (ROOT / "lib/BasicUI/page/PairingPreviewPage.cpp").read_text()
@@ -77,7 +81,7 @@ class Security2LabBoundaryTests(unittest.TestCase):
         budget = (ROOT / "lib/WaveshareOmote/config_v2_sec2_lab_budget.cpp").read_text()
         self.assertIn('kNamespace[] = "omsec2lab"', budget)
         self.assertNotIn('kNamespace[] = "omotepair"', budget)
-        self.assertIn('nvs.getUInt(kCounter, UINT32_MAX) == next', budget)
+        self.assertIn('nvs.getUInt(key, UINT32_MAX) == next', budget)
         self.assertIn("config_v2_pairing_policy::Entry::SettingsTouch", settings)
         # The listener is never started from an HTTP/MQTT command or boot
         # hardware initialization. Default build omits its implementation.
