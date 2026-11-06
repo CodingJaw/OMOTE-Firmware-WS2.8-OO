@@ -78,6 +78,10 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertIn("validate(verifier, check)", identity)
         self.assertIn("mbedtls_ecp_check_privkey(", identity)
         self.assertIn("mbedtls_ecp_mul(", identity)
+        # In the bundled ESP-IDF 5.3.2 Mbed TLS headers, ecp_group.G is
+        # public; MBEDTLS_PRIVATE(G) expands to nonexistent private_G.
+        self.assertIn("&crypto.key.MBEDTLS_PRIVATE(grp).G,", identity)
+        self.assertNotIn(".MBEDTLS_PRIVATE(G)", identity)
         self.assertIn("mbedtls_ecdsa_write_signature(", identity)
         self.assertNotIn("esp_efuse_write", identity)
         self.assertNotIn("replaceAfterAuthenticatedPhysicalApproval", identity)
