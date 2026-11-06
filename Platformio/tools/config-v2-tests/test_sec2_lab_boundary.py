@@ -134,6 +134,34 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertIn("NO TRUST, NO DEPLOYMENT.", page)
         self.assertIn("fp.substr(48, 16)", page)
         self.assertIn("State::AwaitingTouch", page)
+        # Hardware report: the Start lab widget was constructed after
+        # Review OK at the same bottom-left position, occluding the review
+        # button. The mutually verified proof state must hide Start lab
+        # before un-hiding Review OK, without reopening the listener.
+        review_start = page.index(
+            "if (review.state ==\n"
+            "        config_v2_sec2_lab_mutual_review::State::AwaitingTouch)"
+        )
+        review_end = page.index(
+            "if (review.state == config_v2_sec2_lab_mutual_review::State::Reviewed)",
+            review_start,
+        )
+        awaiting = page[review_start:review_end]
+        hide_overlapping = (
+            'lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN)'
+        )
+        show_review = (
+            'lv_obj_remove_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN)'
+        )
+        self.assertIn(hide_overlapping, awaiting)
+        self.assertIn(show_review, awaiting)
+        self.assertLess(awaiting.index(hide_overlapping), awaiting.index(show_review))
+        self.assertNotIn("labProbe_.startFromTrustedLocalTouch(", awaiting)
+        self.assertNotIn("labAttempts_.reserve(", awaiting)
+        self.assertNotIn("labAttemptStore_.reset()", awaiting)
+        self.assertIn('approve_->SetText("Review OK")', page)
+        self.assertEqual(page.count('approve_->SetText("Review OK")'), 1)
+        self.assertIn('reject_->SetText("Reject")', awaiting)
         # A started lab listener keeps a visible, disabled on-screen marker.
         # This must never become a second start action or reopen an NVS window.
         self.assertIn('labStart_->SetText("Start lab")', page)
