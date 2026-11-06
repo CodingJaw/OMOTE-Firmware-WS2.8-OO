@@ -95,12 +95,13 @@ reboots, so a normal two-message handshake consumes two reservations.
 Failure to read, persist or verify the counter aborts the SRP request
 **before** invoking Espressif's security handler. This is deliberately
 more restrictive than five full PIN guesses and cannot be reset remotely.
-The LAB code has no automated rearm mechanism yet; exhausting the quota
-requires a separately reviewed physical recovery path before further tests.
+The LAB code has no automated rearm: exhausting the quota requires an
+explicit two-touch local Settings reset. No remote client can reset it.
 
-No device identity, HA key-possession proof, peer-fingerprint approval,
-credential persistence or remote-write endpoint is implemented in this
-laboratory transport. The per-message limiter is necessary but **not
+The laboratory transport now supports experimental P-256 software device
+identity and ephemeral HA key-possession proofs. It still has NO durable
+HA peer credentials, peer-fingerprint touchscreen approval, trusted
+identity, or remote-write endpoint. The per-message limiter is necessary but **not
 sufficient** for production protection. **Do not flash the lab image as a
 production remote.**
 
@@ -174,8 +175,9 @@ prove and pin a long-lived device key, prove the real HA key, bind both
 to the PAKE transcript, require fresh touchscreen approval of the exact
 HA peer fingerprint, and durably save/revoke trust through protected
 storage. The lab's current 5-frame limit allows at most two ordinary
-handshakes before it blocks additional attempts; it has no approved
-physical reset mechanism yet.
+handshakes before it blocks additional attempts. The reset is now possible
+only through an explicit two-touch local Settings gesture; no cooldown
+and no remote reset are provided.
 
 ## Security2 lab client prerequisites and safe diagnostics
 
