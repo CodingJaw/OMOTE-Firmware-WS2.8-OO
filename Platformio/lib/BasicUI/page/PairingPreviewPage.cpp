@@ -62,7 +62,11 @@ PairingPreviewPage::PairingPreviewPage(config_v2_pairing_policy::Entry entry)
   // The policy additionally refuses to approve without a secure peer.
   approve_ = AddNewElement<UI::Widget::Button>(
       [this] { approveFromTouch(); });
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  approve_->SetText("Review OK");
+#else
   approve_->SetText("Approve");
+#endif
   approve_->SetSize(97, 34);
   approve_->AlignTo(this, LV_ALIGN_BOTTOM_LEFT, 6, -6);
   lv_obj_add_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
@@ -105,6 +109,21 @@ void PairingPreviewPage::timerTick(lv_timer_t *timer) {
 }
 
 void PairingPreviewPage::approveFromTouch() {
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  // This is ONLY an acknowledgement of proof evidence in volatile RAM.
+  // It neither persists HA trust nor authorizes configuration commands.
+  const auto reviewed = labProbe_.acknowledgeLabReviewFromLocalTouch(millis());
+  if (reviewed == config_v2_sec2_lab_mutual_review::Result::LocalReviewOnly) {
+    if (status_) status_->SetText(
+        "LAB evidence reviewed.\n"
+        "NO HA trust was stored.\n"
+        "NO pairing or deployment.\n"
+        "Close this test window.");
+    if (approve_) lv_obj_add_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+    if (reject_) reject_->SetText("Close");
+    return;
+  }
+#endif
   // Future secure PAKE work must bind this page to a trusted coordinator;
   // this preview Window has no network entry point and cannot store trust.
   const auto now = millis();
@@ -124,6 +143,7 @@ void PairingPreviewPage::approveFromTouch() {
 
 void PairingPreviewPage::rejectFromTouch() {
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  labProbe_.rejectLabReviewFromLocalTouch();
   labProbe_.stop();
   if (labStart_) lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
 #endif
@@ -143,6 +163,40 @@ void PairingPreviewPage::refresh() {
   // A locked lab must remain locally rearmable after the short PIN page
   // expires. No timer, retry or reboot is permitted to clear its quota.
   if (labLocked_ || labRearmed_ || labStorageError_) return;
+  if (labProbe_.active()) {
+    const auto review = labProbe_.labReviewSnapshot(now);
+    if (review.state ==
+        config_v2_sec2_lab_mutual_review::State::AwaitingTouch) {
+      // Show the FULL SHA-256 candidate HA fingerprint in four 16-character
+      // rows on the physical touchscreen. This is a LAB-only comparison,
+      // not a completed trusted pairing or authorization.
+      if (code_) code_->SetText("HA key proof verified");
+      const auto &fp = review.haFingerprint;
+      if (fingerprint_) fingerprint_->SetText(
+          fp.substr(0, 16) + "\n" + fp.substr(16, 16) +
+          "\n" + fp.substr(32, 16) + "\n" + fp.substr(48, 16));
+      if (status_) status_->SetText(
+          "Both LAB proofs verified.\n"
+          "Compare HA fingerprint.\n"
+          "Review OK or Reject.\n"
+          "NO TRUST, NO DEPLOYMENT.");
+      if (approve_) lv_obj_remove_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+      if (reject_) reject_->SetText("Reject");
+      return;
+    }
+    if (review.state == config_v2_sec2_lab_mutual_review::State::Reviewed) {
+      if (approve_) lv_obj_add_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+      return;
+    }
+    if (review.state == config_v2_sec2_lab_mutual_review::State::Expired) {
+      if (status_) status_->SetText(
+          "LAB peer review expired.\n"
+          "No trust stored.\n"
+          "Close the test window.");
+      if (approve_) lv_obj_add_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+      return;
+    }
+  }
 #endif
   const auto phase = pairing_.phase(now);
   if (phase == config_v2_pairing_policy::Phase::AwaitingTouch) {
