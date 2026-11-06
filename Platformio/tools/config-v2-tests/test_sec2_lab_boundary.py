@@ -107,7 +107,8 @@ class Security2LabBoundaryTests(unittest.TestCase):
         settings = (ROOT / "lib/BasicUI/page/SettingsPage.cpp").read_text()
         self.assertIn("#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)", page)
         self.assertIn("AddNewElement<UI::Widget::Button>", page)
-        self.assertIn("[this] { startEncryptedLabFromTouch(); }", page)
+        self.assertIn("if (labLocked_) rearmEncryptedLabFromTouch();", page)
+        self.assertIn("else startEncryptedLabFromTouch();", page)
         self.assertIn("PairingPreviewPage::startEncryptedLabFromTouch()", page)
         self.assertIn("labAttempts_.reserve(millis())", page)
         self.assertLess(
@@ -121,15 +122,46 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertIn('labStart_->SetText("Start lab")', page)
         self.assertIn('labStart_->SetText("Lab active")', page)
         self.assertIn('labStart_->SetText("Lab expired")', page)
-        self.assertIn('labStart_->SetText("Lab locked")', page)
+        self.assertIn('labStart_->SetText("Rearm lab")', page)
+        self.assertIn('labStart_->SetText("Confirm")', page)
+        self.assertIn('labStart_->SetText("Rearmed")', page)
+        self.assertIn('labStart_->SetText("NVS error")', page)
         self.assertIn('lv_obj_add_state(labStart_->LvglSelf(), LV_STATE_DISABLED)', page)
         success = page.split('if (status_) status_->SetText(\n      "Encrypted LAB test port 18082.', 1)[1]
         self.assertNotIn('lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN)', success)
         self.assertIn("config_v2_sec2_lab_budget::Store", header)
+        # The only reset is a physical, two-stage, cooldown-gated gesture.
+        self.assertIn("PairingPreviewPage::rearmEncryptedLabFromTouch()", page)
+        self.assertIn("config_v2_pairing_attempt_budget::kRearmDelayMs", page)
+        self.assertIn("kConfirmWindowMs = 15000", page)
+        self.assertIn("now - labLockedAtMs_", page)
+        self.assertIn("now - labConfirmAtMs_", page)
+        self.assertIn("labConfirmRearm_ = true;", page)
+        self.assertIn("labAttemptStore_.reset()", page)
+        self.assertEqual(page.count("labAttemptStore_.reset()"), 1)
+        self.assertLess(
+            page.index("now - labLockedAtMs_"),
+            page.index("labAttemptStore_.reset()")
+        )
+        self.assertLess(
+            page.index("labConfirmRearm_ = true;"),
+            page.index("labAttemptStore_.reset()")
+        )
+        self.assertIn("if (labLocked_ || labRearmed_ || labStorageError_) return;", page)
+        self.assertIn("labAttemptStore_.lockState(kMaximum, kMaximum)", page)
+        self.assertLess(
+            page.index("labAttemptStore_.lockState(kMaximum, kMaximum)", page.index("startEncryptedLabFromTouch() {")),
+            page.index("labAttempts_.reserve(millis())")
+        )
         budget = (ROOT / "lib/WaveshareOmote/config_v2_sec2_lab_budget.cpp").read_text()
         self.assertIn('kNamespace[] = "omsec2lab"', budget)
         self.assertNotIn('kNamespace[] = "omotepair"', budget)
         self.assertIn('nvs.getUInt(key, UINT32_MAX) == next', budget)
+        self.assertIn("LockState Store::lockState(", budget)
+        self.assertIn("bool Store::reset()", budget)
+        self.assertIn("nvs.putUInt(kCounter, 0u)", budget)
+        self.assertIn("nvs.putUInt(kSecMessageCounter, 0u)", budget)
+        self.assertIn("windowsVerified && messagesVerified", budget)
         self.assertIn("config_v2_pairing_policy::Entry::SettingsTouch", settings)
         # The listener is never started from an HTTP/MQTT command or boot
         # hardware initialization. Default build omits its implementation.
@@ -195,6 +227,8 @@ class Security2LabBoundaryTests(unittest.TestCase):
         self.assertIn('sec.encrypt_data(proof)', client)
         self.assertIn('check_lab_reply(plaintext)', client)
         self.assertIn("--device-proof", client)
+        self.assertNotIn('add_argument("--reset', client)
+        self.assertNotIn('add_argument("--rearm', client)
         self.assertIn('verify_device_proof(cookie, challenge, plaintext)', client)
         self.assertIn('"omote-device-proof"', client)
 
