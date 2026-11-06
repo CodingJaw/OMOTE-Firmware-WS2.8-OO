@@ -130,19 +130,20 @@ class Security2LabBoundaryTests(unittest.TestCase):
         success = page.split('if (status_) status_->SetText(\n      "Encrypted LAB test port 18082.', 1)[1]
         self.assertNotIn('lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN)', success)
         self.assertIn("config_v2_sec2_lab_budget::Store", header)
-        # The only reset is a physical, two-stage, cooldown-gated gesture.
+        # Only a physically initiated two-touch confirmation can reset quotas.
+        # LAB lockout intentionally has NO wait; generic production pairing
+        # policy may retain an unrelated cooldown.
         self.assertIn("PairingPreviewPage::rearmEncryptedLabFromTouch()", page)
-        self.assertIn("config_v2_pairing_attempt_budget::kRearmDelayMs", page)
+        self.assertNotIn("config_v2_pairing_attempt_budget::kRearmDelayMs", page)
+        self.assertNotIn("labLockedAtMs_", page + header)
+        self.assertNotIn("Rearm cooling down", page)
+        self.assertIn("No waiting period.", page)
         self.assertIn("kConfirmWindowMs = 15000", page)
-        self.assertIn("now - labLockedAtMs_", page)
         self.assertIn("now - labConfirmAtMs_", page)
         self.assertIn("labConfirmRearm_ = true;", page)
         self.assertIn("labAttemptStore_.reset()", page)
+        self.assertIn("if (!labConfirmRearm_)", page)
         self.assertEqual(page.count("labAttemptStore_.reset()"), 1)
-        self.assertLess(
-            page.index("now - labLockedAtMs_"),
-            page.index("labAttemptStore_.reset()")
-        )
         self.assertLess(
             page.index("labConfirmRearm_ = true;"),
             page.index("labAttemptStore_.reset()")
