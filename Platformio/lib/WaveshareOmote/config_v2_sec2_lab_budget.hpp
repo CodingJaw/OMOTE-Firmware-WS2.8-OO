@@ -19,8 +19,8 @@ public:
   config_v2_pairing_attempt_budget::Reservation reserve(std::uint32_t maximum);
   // Inspect both flash-persistent LAB counters without reserving attempts.
   LockState lockState(std::uint32_t maxWindows, std::uint32_t maxMessages);
-  // RESTRICTED to an explicit local touchscreen rearm after 120-second
-  // cooldown and second confirmation. Resets BOTH lab counters, never
+  // RESTRICTED to an explicit two-touch local touchscreen rearm with NO
+  // cooldown. Resets BOTH lab counters, never
   // production omotepair data, configuration files or lab device identity.
   // No network/serial/boot/timer code is allowed to call reset().
   bool reset();
