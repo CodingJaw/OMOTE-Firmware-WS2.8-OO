@@ -27,7 +27,7 @@ private:
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
   void startEncryptedLabFromTouch();
   void rearmEncryptedLabFromTouch();
-  void showLabLockout(std::uint32_t nowMs);
+  void showLabLockout();
   void showLabStorageError();
 #endif
   config_v2_pairing_policy::Window pairing_;
@@ -42,7 +42,6 @@ private:
   config_v2_pairing_attempt_budget::Gate<config_v2_sec2_lab_budget::Store>
       labAttempts_{labAttemptStore_, 0};
   Widget::Button *labStart_ = nullptr;
-  std::uint32_t labLockedAtMs_ = 0;
   std::uint32_t labConfirmAtMs_ = 0;
   bool labLocked_ = false;
   bool labConfirmRearm_ = false;
