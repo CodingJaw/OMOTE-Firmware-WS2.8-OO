@@ -74,7 +74,10 @@ PairingPreviewPage::PairingPreviewPage(config_v2_pairing_policy::Entry entry)
   // This is a genuine LVGL touch callback on the physical CST3530 display.
   // No REST, MQTT or serial path can execute it.
   labStart_ = AddNewElement<UI::Widget::Button>(
-      [this] { startEncryptedLabFromTouch(); });
+      [this] {
+        if (labLocked_) rearmEncryptedLabFromTouch();
+        else startEncryptedLabFromTouch();
+      });
   labStart_->SetText("Start lab");
   labStart_->SetSize(97, 34);
   labStart_->AlignTo(this, LV_ALIGN_BOTTOM_LEFT, 6, -6);
@@ -137,6 +140,9 @@ void PairingPreviewPage::refresh() {
   const auto now = millis();
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
   labProbe_.tick(now);
+  // A locked lab must remain locally rearmable after the short PIN page
+  // expires. No timer, retry or reboot is permitted to clear its quota.
+  if (labLocked_ || labRearmed_ || labStorageError_) return;
 #endif
   const auto phase = pairing_.phase(now);
   if (phase == config_v2_pairing_policy::Phase::AwaitingTouch) {
@@ -173,14 +179,125 @@ void PairingPreviewPage::refresh() {
 }
 
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+void PairingPreviewPage::showLabLockout(std::uint32_t nowMs) {
+  if (!labLocked_) labLockedAtMs_ = nowMs;
+  labLocked_ = true;
+  labConfirmRearm_ = false;
+  if (status_) status_->SetText(
+      "LAB quota exhausted.\n"
+      "Wait 120s on this screen.\n"
+      "Then tap Rearm lab twice.\n"
+      "No remote reset allowed.");
+  if (labStart_) {
+    labStart_->SetText("Rearm lab");
+    lv_obj_remove_state(labStart_->LvglSelf(), LV_STATE_DISABLED);
+  }
+}
+
+void PairingPreviewPage::showLabStorageError() {
+  labStorageError_ = true;
+  labLocked_ = false;
+  labConfirmRearm_ = false;
+  if (status_) status_->SetText(
+      "LAB quota NVS invalid/error.\n"
+      "No network listener started.\n"
+      "Cannot safely auto-reset.\n"
+      "Preserve NVS for diagnosis.");
+  if (labStart_) {
+    labStart_->SetText("NVS error");
+    lv_obj_add_state(labStart_->LvglSelf(), LV_STATE_DISABLED);
+  }
+}
+
+void PairingPreviewPage::rearmEncryptedLabFromTouch() {
+  // Only called by the direct LVGL touchscreen button above. This operation
+  // cannot be requested through the Python client, HTTP, MQTT, USB, a
+  // reboot, timer, or any HACS API. It NEVER begins a pairing transaction.
+  if (cancelled_ || !labLocked_ || labRearmed_ || labProbe_.active())
+    return;
+  const std::uint32_t now = millis();
+  constexpr std::uint32_t kCooldownMs =
+      config_v2_pairing_attempt_budget::kRearmDelayMs;
+  constexpr std::uint32_t kConfirmWindowMs = 15000;
+  if (static_cast<std::uint32_t>(now - labLockedAtMs_) < kCooldownMs) {
+    if (status_) status_->SetText(
+        "Rearm cooling down: 120s.\n"
+        "Keep this screen open.\n"
+        "Reboot restarts the wait.\n"
+        "No counters changed.");
+    return;
+  }
+  if (!labConfirmRearm_) {
+    labConfirmRearm_ = true;
+    labConfirmAtMs_ = now;
+    if (status_) status_->SetText(
+        "Confirm local LAB reset?\n"
+        "Only windows + secmsgs.\n"
+        "Touch Confirm within 15s.\n"
+        "No HA/config change.");
+    if (labStart_) labStart_->SetText("Confirm");
+    return;
+  }
+  if (static_cast<std::uint32_t>(now - labConfirmAtMs_) > kConfirmWindowMs) {
+    labConfirmRearm_ = false;
+    if (status_) status_->SetText(
+        "Confirmation expired.\n"
+        "Tap Rearm lab again.\n"
+        "No counters changed.");
+    if (labStart_) labStart_->SetText("Rearm lab");
+    return;
+  }
+
+  // NVS must remain valid; corruption is not equivalent to a PIN quota.
+  constexpr std::uint32_t kMaximum = 
+      config_v2_pairing_attempt_budget::kMaximumAttempts;
+  const auto state = labAttemptStore_.lockState(kMaximum, kMaximum);
+  if (state == config_v2_sec2_lab_budget::LockState::StorageError) {
+    showLabStorageError();
+    return;
+  }
+  if (state == config_v2_sec2_lab_budget::LockState::Exhausted &&
+      !labAttemptStore_.reset()) {
+    showLabStorageError();
+    return;
+  }
+  labLocked_ = false;
+  labRearmed_ = true;
+  labConfirmRearm_ = false;
+  if (status_) status_->SetText(
+      "LAB quota rearmed locally.\n"
+      "Close and reopen this page\n"
+      "for a fresh six-digit code.\n"
+      "No pairing or deployment.");
+  if (labStart_) {
+    labStart_->SetText("Rearmed");
+    lv_obj_add_state(labStart_->LvglSelf(), LV_STATE_DISABLED);
+  }
+}
+
 void PairingPreviewPage::startEncryptedLabFromTouch() {
   // A local Settings touchscreen tap is required for every lab window.
   // Reserve nonvolatile attempt budget *before* opening any network socket.
   // This counts lab window openings, not individual SRP attempts: never
   // deploy this as production pairing or claim brute-force protection.
-  if (cancelled_ || labProbe_.active() ||
+  if (cancelled_ || labLocked_ || labRearmed_ || labStorageError_ ||
+      labProbe_.active() ||
       pairing_.phase(millis()) != config_v2_pairing_policy::Phase::ShowCode)
     return;
+  // Diagnose BOTH independent flash-persistent laboratory budgets before
+  // consuming an additional window. A used-up Security2 frame budget must
+  // not cause us to open another empty port-18082 listener.
+  constexpr std::uint32_t kMaximum =
+      config_v2_pairing_attempt_budget::kMaximumAttempts;
+  const auto quota = labAttemptStore_.lockState(kMaximum, kMaximum);
+  if (quota == config_v2_sec2_lab_budget::LockState::Exhausted) {
+    showLabLockout(millis());
+    return;
+  }
+  if (quota == config_v2_sec2_lab_budget::LockState::StorageError) {
+    showLabStorageError();
+    return;
+  }
   if (!WiFi.isConnected()) {
     if (status_) status_->SetText("Connect Wi-Fi before starting the lab.");
     return;
@@ -189,14 +306,10 @@ void PairingPreviewPage::startEncryptedLabFromTouch() {
   if (pin.size() != 6) return;
   const auto reservation = labAttempts_.reserve(millis());
   if (reservation != config_v2_pairing_attempt_budget::Status::Allowed) {
-    if (status_) status_->SetText(
-        "Lab attempt budget exhausted/invalid.\n"
-        "No network listener opened.\n"
-        "Do not erase NVS remotely.");
-    if (labStart_) {
-      labStart_->SetText("Lab locked");
-      lv_obj_add_state(labStart_->LvglSelf(), LV_STATE_DISABLED);
-    }
+    if (reservation == config_v2_pairing_attempt_budget::Status::Locked)
+      showLabLockout(millis());
+    else
+      showLabStorageError();
     return;
   }
   const bool started = labProbe_.startFromTrustedLocalTouch(
