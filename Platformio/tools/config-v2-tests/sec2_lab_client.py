@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from getpass import getpass
+from hashlib import sha256
 import ipaddress
 import json
 import os
@@ -165,7 +166,12 @@ async def probe(
             response = await tp.send_data("omote-ha-proof", ciphertext.decode("latin-1"))
             plaintext = sec.decrypt_data(response.encode("latin-1"))
             check_lab_reply(plaintext)
+            # Print only the ephemeral PUBLIC key's SHA-256 fingerprint.
+            # A user can compare it against the four rows on the remote.
+            # The private key and six-digit PIN are never printed or saved.
+            ha_fingerprint = sha256(proof[1:66]).hexdigest()
             print("PASS: ephemeral HA P-256 private-key possession proved inside encrypted session.")
+            print(f"LAB ONLY candidate HA public-key SHA-256 fingerprint: {ha_fingerprint}")
 
         if device_proof:
             stage = "device-key-proof"
@@ -181,6 +187,9 @@ async def probe(
             print(f"LAB ONLY device public-key SHA-256 fingerprint: {fingerprint}")
             print("This lab software key may be extractable from unencrypted NVS; "
                   "do NOT mark the remote trusted.")
+        if ha_proof and device_proof:
+            print("Compare the candidate HA fingerprint with the Waveshare screen.")
+            print("Touchscreen Review OK is only a LAB acknowledgement; NOT enrollment.")
         print("No production device/HA identity, pairing trust, or configuration writes were tested.")
     except Exception as exc:
         raise LabProbeError(stage, type(exc).__name__) from None
