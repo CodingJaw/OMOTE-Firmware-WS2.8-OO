@@ -15,6 +15,8 @@
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
 #include "config_v2_sec2_lab_budget.hpp"
 #include "config_v2_sec2_lab_device_identity.hpp"
+#include "config_v2_sec2_lab_mutual_review.hpp"
+#include <mutex>
 #endif
 #include "protocomm.h"
 #include "esp_err.h"
@@ -45,6 +47,15 @@ public:
   void tick(std::uint32_t nowMs);
   void stop();
   bool active() const { return pc_ != nullptr; }
+#if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+  // Volatile LAB-only results from both independently verified proofs.
+  // This is NOT paired/trusted state and cannot enable operations.
+  config_v2_sec2_lab_mutual_review::Snapshot labReviewSnapshot(
+      std::uint32_t nowMs);
+  config_v2_sec2_lab_mutual_review::Result
+      acknowledgeLabReviewFromLocalTouch(std::uint32_t nowMs);
+  void rejectLabReviewFromLocalTouch();
+#endif
 
 private:
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
@@ -76,6 +87,8 @@ private:
   protocomm_security_t boundedSecurity_{};
   config_v2_sec2_lab_budget::Store messageStore_;
   config_v2_sec2_lab_device_identity::Identity deviceIdentity_;
+  std::mutex reviewMutex_;
+  config_v2_sec2_lab_mutual_review::Review labReview_;
   static Probe *activeLab_;
 #endif
 };
