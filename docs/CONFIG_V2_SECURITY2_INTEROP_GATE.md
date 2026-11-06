@@ -309,19 +309,17 @@ compile tests**:
    the touchscreen says `LAB quota exhausted` and the action
    becomes `Rearm lab`. If instead `NVS error` is displayed, stop:
    malformed/unreadable storage is not treated as permission to reset.
-3. Keep this touchscreen page open for **120 seconds** starting when
-   the lockout was observed. Power cycling or leaving the screen
-   restarts this local cooldown.
-4. Tap `Rearm lab`, then `Confirm` within **15 seconds**. Only
-   these physical touches can invoke the reset. Both counters are
-   write-verified before the UI says `Rearmed`.
-5. Close the page; reopen it to obtain a new local six-digit PIN.
+3. Tap `Rearm lab` **immediately** (no cooldown), then `Confirm`
+   within **15 seconds**. Only these physical touches can invoke the
+   reset. Both counters are write-verified before the UI says `Rearmed`.
+4. Close the page; reopen it to obtain a new local six-digit PIN.
    Tap `Start lab` for a fresh 120-second listener.
 
 There is NO automatic restart of the lab listener or reset when it
 times out. The serial/HTTP/HACS/Python tools cannot rearm the budget.
-The lab reset is repeatable only through the local cooldown and
-two-touch process; production deployment remains disabled.
+The lab reset is repeatable only through the local two-touch process;
+production deployment remains disabled. The **120-second listener
+lifetime** remains unchanged; it is not a reset delay.
 
 Do **not** erase all NVS or invoke `erase_flash` to recover a lab
 lockout: that may damage the only functional OMOTE configuration.
