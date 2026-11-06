@@ -67,15 +67,54 @@ Store::reserveSecurityMessage(std::uint32_t maximum) {
   return reserveKey(kSecMessageCounter, maximum);
 }
 
+LockState Store::lockState(std::uint32_t maxWindows,
+                           std::uint32_t maxMessages) {
+  Guard guard;
+  if (!guard.held() || maxWindows == 0 || maxMessages == 0)
+    return LockState::StorageError;
+  Preferences nvs;
+  // New lab images may not have a namespace yet. Creating the empty
+  // namespace must not set, remove or increment either budget key.
+  if (!nvs.begin(kNamespace, false)) return LockState::StorageError;
+  const bool windowsExist = nvs.isKey(kCounter);
+  const bool messagesExist = nvs.isKey(kSecMessageCounter);
+  const std::uint32_t windows = nvs.getUInt(kCounter, UINT32_MAX);
+  const std::uint32_t messages = nvs.getUInt(kSecMessageCounter, UINT32_MAX);
+  nvs.end();
+
+  if ((windowsExist && windows == UINT32_MAX) ||
+      (messagesExist && messages == UINT32_MAX) ||
+      (windowsExist && windows > maxWindows) ||
+      (messagesExist && messages > maxMessages))
+    return LockState::StorageError;
+  if ((windowsExist && windows >= maxWindows) ||
+      (messagesExist && messages >= maxMessages))
+    return LockState::Exhausted;
+  return LockState::Ready;
+}
+
 bool Store::reset() {
+  // NEVER expose this operation via a network, USB serial, timer or
+  // automatic reboot path. The only caller is the two-confirmation,
+  // cooldown-gated physical Settings touchscreen callback.
   Guard guard;
   if (!guard.held()) return false;
   Preferences nvs;
   if (!nvs.begin(kNamespace, false)) return false;
-  const bool written = nvs.putUInt(kCounter, 0u) == sizeof(std::uint32_t);
-  const bool verified = written && nvs.getUInt(kCounter, UINT32_MAX) == 0u;
+
+  // Both quota keys belong solely to this isolated lab. A failed second
+  // write leaves an unusable/locked lab rather than opening an HTTP service;
+  // do not attempt to clear all NVS or other namespaces.
+  const bool windowsWritten =
+      nvs.putUInt(kCounter, 0u) == sizeof(std::uint32_t);
+  const bool windowsVerified =
+      windowsWritten && nvs.getUInt(kCounter, UINT32_MAX) == 0u;
+  const bool messagesWritten = windowsVerified &&
+      nvs.putUInt(kSecMessageCounter, 0u) == sizeof(std::uint32_t);
+  const bool messagesVerified = messagesWritten &&
+      nvs.getUInt(kSecMessageCounter, UINT32_MAX) == 0u;
   nvs.end();
-  return verified;
+  return windowsVerified && messagesVerified;
 }
 } // namespace config_v2_sec2_lab_budget
 #endif
