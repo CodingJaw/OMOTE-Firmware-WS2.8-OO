@@ -179,14 +179,13 @@ void PairingPreviewPage::refresh() {
 }
 
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
-void PairingPreviewPage::showLabLockout(std::uint32_t nowMs) {
-  if (!labLocked_) labLockedAtMs_ = nowMs;
+void PairingPreviewPage::showLabLockout() {
   labLocked_ = true;
   labConfirmRearm_ = false;
   if (status_) status_->SetText(
       "LAB quota exhausted.\n"
-      "Wait 120s on this screen.\n"
-      "Then tap Rearm lab twice.\n"
+      "Tap Rearm lab, then Confirm.\n"
+      "No waiting period.\n"
       "No remote reset allowed.");
   if (labStart_) {
     labStart_->SetText("Rearm lab");
@@ -216,17 +215,7 @@ void PairingPreviewPage::rearmEncryptedLabFromTouch() {
   if (cancelled_ || !labLocked_ || labRearmed_ || labProbe_.active())
     return;
   const std::uint32_t now = millis();
-  constexpr std::uint32_t kCooldownMs =
-      config_v2_pairing_attempt_budget::kRearmDelayMs;
   constexpr std::uint32_t kConfirmWindowMs = 15000;
-  if (static_cast<std::uint32_t>(now - labLockedAtMs_) < kCooldownMs) {
-    if (status_) status_->SetText(
-        "Rearm cooling down: 120s.\n"
-        "Keep this screen open.\n"
-        "Reboot restarts the wait.\n"
-        "No counters changed.");
-    return;
-  }
   if (!labConfirmRearm_) {
     labConfirmRearm_ = true;
     labConfirmAtMs_ = now;
@@ -291,7 +280,7 @@ void PairingPreviewPage::startEncryptedLabFromTouch() {
       config_v2_pairing_attempt_budget::kMaximumAttempts;
   const auto quota = labAttemptStore_.lockState(kMaximum, kMaximum);
   if (quota == config_v2_sec2_lab_budget::LockState::Exhausted) {
-    showLabLockout(millis());
+    showLabLockout();
     return;
   }
   if (quota == config_v2_sec2_lab_budget::LockState::StorageError) {
@@ -307,7 +296,7 @@ void PairingPreviewPage::startEncryptedLabFromTouch() {
   const auto reservation = labAttempts_.reserve(millis());
   if (reservation != config_v2_pairing_attempt_budget::Status::Allowed) {
     if (reservation == config_v2_pairing_attempt_budget::Status::Locked)
-      showLabLockout(millis());
+      showLabLockout();
     else
       showLabStorageError();
     return;
