@@ -20,9 +20,11 @@
 #include <cstring>
 #include <array>
 #include <cstdio>
+#include <string>
 
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
 #include "config_v2_sec2_lab_peer_proof.hpp"
+#include <mbedtls/sha256.h>
 #include "protocomm_httpd.h"
 #include "protocomm_security2.h"
 #include "esp_system.h"
@@ -49,12 +51,48 @@ template <typename Security>
 std::uint8_t securityPatchVersion(const Security &, long) {
   return 0;
 }
+
+// Fingerprints are derived ONLY from a public key after its proof has been
+// independently verified inside this same encrypted Security2 session.
+// They are never obtained from untrusted public port-80 metadata.
+std::string fingerprintOfVerifiedPublic(const std::uint8_t *publicKey65) {
+  std::uint8_t hash[32] = {};
+  if (!publicKey65 || mbedtls_sha256(publicKey65, 65, hash, 0) != 0)
+    return {};
+  constexpr char hex[] = "0123456789abcdef";
+  std::string fingerprint(64, '0');
+  for (std::size_t i = 0; i < 32; ++i) {
+    fingerprint[2 * i] = hex[hash[i] >> 4];
+    fingerprint[2 * i + 1] = hex[hash[i] & 0x0f];
+  }
+  return fingerprint;
+}
 } // namespace
 #endif
 
 Probe::~Probe() { stop(); }
 
 #if defined(OMOTE_CONFIG_V2_SEC2_LAB_PROBE)
+config_v2_sec2_lab_mutual_review::Snapshot Probe::labReviewSnapshot(
+    std::uint32_t nowMs) {
+  std::lock_guard<std::mutex> lock(reviewMutex_);
+  return labReview_.snapshot(nowMs);
+}
+
+config_v2_sec2_lab_mutual_review::Result
+Probe::acknowledgeLabReviewFromLocalTouch(std::uint32_t nowMs) {
+  std::lock_guard<std::mutex> lock(reviewMutex_);
+  if (!active() ||
+      static_cast<std::uint32_t>(nowMs - startedAtMs_) >= kMaxWindowMs)
+    return config_v2_sec2_lab_mutual_review::Result::NotReady;
+  return labReview_.acknowledgeFromLocalTouch(nowMs);
+}
+
+void Probe::rejectLabReviewFromLocalTouch() {
+  std::lock_guard<std::mutex> lock(reviewMutex_);
+  labReview_.rejectFromLocalTouch();
+}
+
 
 esp_err_t Probe::gatedSecurityRequest(
     protocomm_security_handle_t handle, const void *params,
@@ -127,6 +165,17 @@ esp_err_t Probe::deviceProofRequest(
   auto *reply = static_cast<std::uint8_t *>(std::malloc(bytes));
   if (!reply) return ESP_ERR_NO_MEM;
   std::memcpy(reply, buffer.data(), bytes);
+  const auto fp = fingerprintOfVerifiedPublic(buffer.data() + 1);
+  config_v2_sec2_lab_mutual_review::Result reviewResult;
+  {
+    std::lock_guard<std::mutex> lock(self->reviewMutex_);
+    reviewResult = self->labReview_.observeVerifiedDevice(session, fp, millis());
+  }
+  if (reviewResult != config_v2_sec2_lab_mutual_review::Result::Ok &&
+      reviewResult != config_v2_sec2_lab_mutual_review::Result::TouchRequired) {
+    std::free(reply);
+    return ESP_ERR_INVALID_STATE;
+  }
   *output = reply;
   *outLen = static_cast<ssize_t>(bytes);
   return ESP_OK;
@@ -145,6 +194,17 @@ esp_err_t Probe::candidateProofRequest(
   if (!config_v2_sec2_lab_peer_proof::verifyCandidate(
           session, input, static_cast<std::size_t>(inLen)))
     return ESP_ERR_INVALID_ARG;
+  // Only after actual P-256 signature verification has succeeded do we
+  // permit this candidate to enter the volatile same-session lab review.
+  const auto fp = fingerprintOfVerifiedPublic(input + 1);
+  config_v2_sec2_lab_mutual_review::Result reviewResult;
+  {
+    std::lock_guard<std::mutex> lock(self->reviewMutex_);
+    reviewResult = self->labReview_.observeVerifiedHa(session, fp, millis());
+  }
+  if (reviewResult != config_v2_sec2_lab_mutual_review::Result::Ok &&
+      reviewResult != config_v2_sec2_lab_mutual_review::Result::TouchRequired)
+    return ESP_ERR_INVALID_STATE;
   constexpr auto kBytes = sizeof(config_v2_sec2_lab_peer_proof::kResponse) - 1;
   auto *reply = static_cast<std::uint8_t *>(std::malloc(kBytes));
   if (!reply) return ESP_ERR_NO_MEM;
@@ -160,6 +220,10 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
                                       std::size_t len,
                                       std::uint32_t nowMs) {
   if (active() || activeLab_ != nullptr) return false;
+  {
+    std::lock_guard<std::mutex> lock(reviewMutex_);
+    labReview_.beginFromLocalTouch(nowMs);
+  }
   // The ONLY identity provisioning entrypoint is this physical touch path.
   // Never create or replace a device key from a network endpoint.
   if (!deviceIdentity_.prepareFromTrustedLocalTouch()) return false;
@@ -252,6 +316,10 @@ void Probe::tick(std::uint32_t nowMs) {
 void Probe::stop() {
   if (!pc_) {
     if (activeLab_ == this) activeLab_ = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(reviewMutex_);
+      labReview_.close();
+    }
     material_.clear();
     deviceIdentity_.clear();
     return;
@@ -269,6 +337,10 @@ void Probe::stop() {
   protocomm_delete(pc_);
   pc_ = nullptr;
   if (activeLab_ == this) activeLab_ = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(reviewMutex_);
+    labReview_.close();
+  }
   material_.clear();
   deviceIdentity_.clear();
 }
