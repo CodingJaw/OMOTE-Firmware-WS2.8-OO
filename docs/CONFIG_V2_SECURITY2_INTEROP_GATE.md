@@ -278,6 +278,56 @@ device provisioning/recovery, durable HA peer credentials and
 fresh touchscreen comparison/approval of both identities within the
 same authenticated session.
 
+## Local-only laboratory quota rearm (2026-11-05)
+
+The Security2 lab has **two independent flash-persistent limits**
+in the dedicated `omsec2lab` namespace:
+
+- `windows`: up to five physically opened lab windows.
+- `secmsgs`: up to five incoming SRP handshake messages across all
+  windows and reboots (a normal SRP session consumes multiple frames).
+
+The historical `Lab attempt budget exhausted/invalid` message arose
+from the **window** counter, not necessarily a failed SRP handshake.
+Messages such as `security2: Failed to authenticate client proof!`
+are separate SRP failures and may also exhaust `secmsgs`.
+
+`sec2_lab_client.py` has **NO `--reset` option** and must never get one.
+Rebooting the device, reflashing ordinary firmware, changing the host
+script, or retrying remotely does **not** reset the budget.
+
+The isolated **LAB firmware only** now offers a physical-screen
+rearm, which never touches production `omotepair` counters, HA trust,
+LittleFS/JSON configuration, or the independent `omsec2id/labkey`
+software device-identity record.
+
+After flashing a firmware revision with this feature **and passing its
+compile tests**:
+
+1. Open `Settings → SEC2 encrypted LAB test`; tap `Start lab`.
+2. If the valid persistent window OR frame quota is exhausted,
+   the touchscreen says `LAB quota exhausted` and the action
+   becomes `Rearm lab`. If instead `NVS error` is displayed, stop:
+   malformed/unreadable storage is not treated as permission to reset.
+3. Keep this touchscreen page open for **120 seconds** starting when
+   the lockout was observed. Power cycling or leaving the screen
+   restarts this local cooldown.
+4. Tap `Rearm lab`, then `Confirm` within **15 seconds**. Only
+   these physical touches can invoke the reset. Both counters are
+   write-verified before the UI says `Rearmed`.
+5. Close the page; reopen it to obtain a new local six-digit PIN.
+   Tap `Start lab` for a fresh 120-second listener.
+
+There is NO automatic restart of the lab listener or reset when it
+times out. The serial/HTTP/HACS/Python tools cannot rearm the budget.
+The lab reset is repeatable only through the local cooldown and
+two-touch process; production deployment remains disabled.
+
+Do **not** erase all NVS or invoke `erase_flash` to recover a lab
+lockout: that may damage the only functional OMOTE configuration.
+The reason for a failed SRP proof must be diagnosed rather than
+blindly retrying after rearming.
+
 ## Security warning
 
 Espressif advisory GHSA-9r76-858f-v6jh (CVE-2026-45542, May 18, 2026)
