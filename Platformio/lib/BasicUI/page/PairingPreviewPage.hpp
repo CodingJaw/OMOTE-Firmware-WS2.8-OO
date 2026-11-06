@@ -47,6 +47,7 @@ private:
   bool labLocked_ = false;
   bool labConfirmRearm_ = false;
   bool labRearmed_ = false;
+  bool labStorageError_ = false;
 #endif
   bool cancelled_ = false;
   lv_timer_t *timer_ = nullptr;
