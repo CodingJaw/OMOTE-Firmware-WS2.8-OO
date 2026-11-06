@@ -95,8 +95,8 @@ LockState Store::lockState(std::uint32_t maxWindows,
 
 bool Store::reset() {
   // NEVER expose this operation via a network, USB serial, timer or
-  // automatic reboot path. The only caller is the two-confirmation,
-  // cooldown-gated physical Settings touchscreen callback.
+  // automatic reboot path. The only caller is the two-confirmation
+  // physical Settings touchscreen callback.
   Guard guard;
   if (!guard.held()) return false;
   Preferences nvs;
