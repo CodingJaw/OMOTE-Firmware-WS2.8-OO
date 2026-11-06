@@ -280,6 +280,60 @@ device provisioning/recovery, durable HA peer credentials and
 fresh touchscreen comparison/approval of both identities within the
 same authenticated session.
 
+## Volatile same-session key review (2026-11-05)
+
+The user has now hardware-confirmed SRP6a/AES-GCM, ephemeral candidate
+HA P-256 signing, persistent LAB device software-key signing and local
+no-wait quota rearm. These results are NOT a trusted pairing.
+
+The isolated LAB image now implements a **next-stage, volatile** dual-proof
+review, defined in `config_v2_sec2_lab_mutual_review.hpp` and
+`Platformio/tools/config-v2-tests/sec2_lab_mutual_review_contract.json`.
+The `omote-ha-proof` handler records the SHA-256 fingerprint of the
+*actually signature-verified* HA public key. The
+`omote-device-proof` handler records the SHA-256 fingerprint of the
+*actually signed* device public key. Each event is bound to the exact
+Security2 HTTPD session id used by protocomm AES-GCM. Evidence from
+different sessions, duplicate proofs, bad fingerprints or expired
+windows fails closed. State is protected by a mutex, lives only in RAM,
+and is erased when the local lab window shuts down.
+
+When **BOTH** proofs are received in one locally opened 120-second lab
+window and same session, the Waveshare screen shows all 64 hex
+characters of the candidate HA public-key fingerprint across four
+rows. It offers `Review OK` and `Reject` for at most 60 seconds
+after both proofs. `Review OK` is strictly a **local acknowledgement
+of evidence**, not a pairing approval, authentication grant, durable
+trust commit or authorization. The host client can finish and close
+its HTTP socket before this review; therefore the review MUST NOT be
+used for production enrollment.
+
+The reference Python client prints its *ephemeral public* HA key's
+fingerprint after the encrypted HA-key proof passes, so the operator
+can compare the two 64-hex-character values without exposing a
+private key or the PIN. Run the existing combined lab test only once
+per deliberate acceptance check:
+
+```sh
+cd Platformio
+python3 tools/config-v2-tests/sec2_lab_client.py \
+  --host 10.0.10.121 --port 18082 --ack-lab-only \
+  --ha-proof --device-proof
+```
+
+Never repeat solely for convenience: each Security2 negotiation charges
+two persistent lab message frames. Physical rearm requires two local
+touchscreen confirmations. Neither this endpoint nor the production
+port-80 API can change trusted HA identity or deploy configurations.
+
+**This stage requires its own hardware acceptance.** Passing isolated
+C++ state-machine/CI tests is not the same as proving the physical
+LVGL fingerprint screen, touch wiring, or synchronized HTTPD callbacks.
+Production design still requires durable protected device private
+key storage, a durable HA installation identity, replay-safe transcript
+binding after long-lived key proof, genuinely **live** paired session
+validation before touchscreen approval, and revocation/re-pairing.
+
 ## Local-only laboratory quota rearm (2026-11-05)
 
 The Security2 lab has **two independent flash-persistent limits**
