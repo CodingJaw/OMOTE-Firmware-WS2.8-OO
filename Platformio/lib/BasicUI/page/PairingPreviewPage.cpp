@@ -180,7 +180,16 @@ void PairingPreviewPage::refresh() {
           "Compare HA fingerprint.\n"
           "Review OK or Reject.\n"
           "NO TRUST, NO DEPLOYMENT.");
-      if (approve_) lv_obj_remove_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+      // The Start lab button was created after Review OK at the exact
+      // same bottom-left coordinates. LVGL draws it on top even when
+      // disabled, masking the Review OK control. Once both proofs have
+      // passed, replace the inactive start indicator with the review action.
+      // This does NOT reopen the lab listener or reserve another quota.
+      if (labStart_) lv_obj_add_flag(labStart_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+      if (approve_) {
+        lv_obj_remove_flag(approve_->LvglSelf(), LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(approve_->LvglSelf());
+      }
       if (reject_) reject_->SetText("Reject");
       return;
     }
