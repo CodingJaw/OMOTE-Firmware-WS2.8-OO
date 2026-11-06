@@ -95,7 +95,7 @@ bool validate(Crypto &crypto, const SecretRecord &record) {
           &crypto.key.MBEDTLS_PRIVATE(grp),
           &crypto.key.MBEDTLS_PRIVATE(Q),
           &crypto.key.MBEDTLS_PRIVATE(d),
-          &crypto.key.MBEDTLS_PRIVATE(grp).MBEDTLS_PRIVATE(G),
+          &crypto.key.MBEDTLS_PRIVATE(grp).G,
           mbedtls_ctr_drbg_random, &crypto.rng) != 0)
     return false;
 
