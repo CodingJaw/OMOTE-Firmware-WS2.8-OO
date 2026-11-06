@@ -9,11 +9,20 @@
 #include "config_v2_pairing_attempt_budget.hpp"
 #include <cstdint>
 namespace config_v2_sec2_lab_budget {
+// Read-only diagnosis of the two independent LAB quotas. An unreadable,
+// malformed or out-of-range counter is a storage error, not permission to
+// reset anything.
+enum class LockState { Ready, Exhausted, StorageError };
+
 class Store {
 public:
   config_v2_pairing_attempt_budget::Reservation reserve(std::uint32_t maximum);
-  // Reserved solely for a future explicit LOCAL physical rearm operation.
-  // No application, network or timed call invokes reset().
+  // Inspect both flash-persistent LAB counters without reserving attempts.
+  LockState lockState(std::uint32_t maxWindows, std::uint32_t maxMessages);
+  // RESTRICTED to an explicit local touchscreen rearm after 120-second
+  // cooldown and second confirmation. Resets BOTH lab counters, never
+  // production omotepair data, configuration files or lab device identity.
+  // No network/serial/boot/timer code is allowed to call reset().
   bool reset();
   // Reserve NVS counter before EVERY Security2 protocol message (including
   // initial and proof frames). Conservatively counts a full handshake twice.
