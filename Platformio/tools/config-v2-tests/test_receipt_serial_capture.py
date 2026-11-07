@@ -54,9 +54,7 @@ class ReceiptSerialCaptureTests(unittest.TestCase):
         fake=SimpleNamespace(Serial=FakeSerial,SerialException=OSError)
         with tempfile.TemporaryDirectory() as directory,patch.dict(sys.modules,{"serial":fake}):
             destination=Path(directory)/"serial.log"
-            with self.assertLogs(level="ERROR") if False else patch(
-                "sys.stderr",new_callable=io.StringIO
-            ):
+            with patch("sys.stderr",new_callable=io.StringIO):
                 self.assertEqual(capture_mod.capture("host:1234",destination,1),2)
                 self.assertEqual(capture_mod.capture("/dev/ttyACM0",destination,0),2)
             self.assertFalse(destination.exists())
