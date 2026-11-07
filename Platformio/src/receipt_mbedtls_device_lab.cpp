@@ -1,3 +1,4 @@
+#if defined(OMOTE_RECEIPT_MBEDTLS_DEVICE_LAB)
 // WAVESHARE ISOLATED P-256 RECEIPT CRYPTO DIAGNOSTIC IMAGE.
 // Opt-in ONLY: waveshare28v2_omote_sec2_receipt_device_lab.
 // Replaces the running OMOTE image WHEN UPLOADED; do not upload without
@@ -72,3 +73,5 @@ void setup() {
                 all_ok ? "PASS" : "FAIL");
 }
 void loop() { delay(1000); }
+
+#endif // OMOTE_RECEIPT_MBEDTLS_DEVICE_LAB
