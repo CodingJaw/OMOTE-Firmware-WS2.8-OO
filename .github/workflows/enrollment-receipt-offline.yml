@@ -6,6 +6,7 @@ on:
       - 'Platformio/tools/config-v2-tests/enrollment_receipt_*'
       - 'Platformio/tools/config-v2-tests/sec2_verified_proofs_transcript*'
       - 'Platformio/tools/config-v2-tests/test_sec2_verified_proofs_transcript.py'
+      - 'Platformio/tools/config-v2-tests/test_sec2_verified_proofs_crosslang.py'
       - 'Platformio/tools/config-v2-tests/test_receipt_espidf_build_guards.py'
       - 'Platformio/tools/config-v2-tests/*receipt_device_serial.py'
       - 'Platformio/tools/config-v2-tests/check_receipt_device_serial.py'
@@ -44,6 +45,8 @@ jobs:
             -p 'test_receipt_serial_capture.py' -v
           python3 -m unittest discover -s Platformio/tools/config-v2-tests \
             -p 'test_sec2_verified_proofs_transcript.py' -v
+          python3 -m unittest discover -s Platformio/tools/config-v2-tests \
+            -p 'test_sec2_verified_proofs_crosslang.py' -v
       - name: Verify firmware remains disconnected from receipt code
         run: |
           python3 - <<'PY'
