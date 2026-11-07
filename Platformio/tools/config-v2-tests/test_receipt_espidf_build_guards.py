@@ -75,6 +75,8 @@ class WaveshareReceiptBuildGuards(unittest.TestCase):
         self.assertIn('set(app_sources "${CMAKE_CURRENT_LIST_DIR}/main.cpp")',source)
         self.assertIn('"${CMAKE_CURRENT_LIST_DIR}/receipt_mbedtls_compile_probe.cpp"',source)
         self.assertIn("SRCS ${app_sources}",source)
+        self.assertIn("REQUIRES mbedtls",source)
+        self.assertNotIn("REQUIRES arduino",source)
         self.assertLess(source.index("if(OMOTE_RECEIPT_DEVICE_LAB)"),
                         source.index("elseif(OMOTE_RECEIPT_COMPILE_PROBE)"))
         self.assertNotIn("FILE(GLOB_RECURSE",source)
