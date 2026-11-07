@@ -23,6 +23,8 @@ class WaveshareReceiptBuildGuards(unittest.TestCase):
                       environment.get("build_src_filter"))
         self.assertIn("+<main.cpp>",environment.get("build_src_filter"))
         self.assertIn("-I tools/config-v2-tests",environment.get("build_flags"))
+        self.assertIn("-D OMOTE_RECEIPT_MBEDTLS_COMPILE_PROBE=1",environment.get("build_flags"))
+        self.assertIn("#if defined(OMOTE_RECEIPT_MBEDTLS_COMPILE_PROBE)",PROBE.read_text())
         self.assertNotIn("receipt_mbedtls_compile_probe.cpp",
                          settings["env:waveshare28v2_omote"].get("build_src_filter",""))
 
@@ -47,6 +49,8 @@ class WaveshareReceiptBuildGuards(unittest.TestCase):
         self.assertEqual(env.get("extends"),"env:waveshare28v2_omote")
         self.assertIn("-<*>",env.get("build_src_filter"))
         self.assertIn("+<receipt_mbedtls_device_lab.cpp>",env.get("build_src_filter"))
+        self.assertIn("-D OMOTE_RECEIPT_MBEDTLS_DEVICE_LAB=1",env.get("build_flags"))
+        self.assertIn("#if defined(OMOTE_RECEIPT_MBEDTLS_DEVICE_LAB)",src)
         for item in vectors:
             self.assertIn(item["public_key_sec1_hex"],src)
             self.assertIn(item["signature_der_hex"],src)
