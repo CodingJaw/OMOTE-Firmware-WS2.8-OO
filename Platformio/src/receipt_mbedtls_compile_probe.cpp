@@ -1,3 +1,4 @@
+#if defined(OMOTE_RECEIPT_MBEDTLS_COMPILE_PROBE)
 // Receipt cryptography compile-and-link probe for Waveshare ESP32-S3.
 //
 // Included ONLY in [env:waveshare28v2_omote_sec2_receipt_compile].
@@ -28,3 +29,5 @@ extern "C" bool omote_receipt_mbedtls_compile_probe() {
            && !production_pairing_enabled()
            && !device_write_enabled();
 }
+
+#endif // OMOTE_RECEIPT_MBEDTLS_COMPILE_PROBE
