@@ -54,6 +54,8 @@ class WaveshareReceiptBuildGuards(unittest.TestCase):
         self.assertIn("-D OMOTE_RECEIPT_MBEDTLS_DEVICE_LAB=1",env.get("build_flags"))
         self.assertIn("#if defined(OMOTE_RECEIPT_MBEDTLS_DEVICE_LAB)",src)
         self.assertIn("-DOMOTE_RECEIPT_DEVICE_LAB=ON",env.get("board_build.cmake_extra_args"))
+        self.assertEqual(env.get("lib_deps"), "")
+        self.assertEqual(env.get("lib_ignore"), "")
         for item in vectors:
             self.assertIn(item["public_key_sec1_hex"],src)
             self.assertIn(item["signature_der_hex"],src)
@@ -76,6 +78,8 @@ class WaveshareReceiptBuildGuards(unittest.TestCase):
         self.assertIn('"${CMAKE_CURRENT_LIST_DIR}/receipt_mbedtls_compile_probe.cpp"',source)
         self.assertIn("SRCS ${app_sources}",source)
         self.assertIn("REQUIRES mbedtls",source)
+        self.assertIn("if(OMOTE_RECEIPT_DEVICE_LAB)\n    idf_component_register(\n        SRCS ${app_sources}\n        REQUIRES mbedtls\n    )",source)
+        self.assertIn("REQUIRES espressif__esp_websocket_client espressif__mdns joltwallet__littlefs",source)
         self.assertNotIn("REQUIRES arduino",source)
         self.assertLess(source.index("if(OMOTE_RECEIPT_DEVICE_LAB)"),
                         source.index("elseif(OMOTE_RECEIPT_COMPILE_PROBE)"))
