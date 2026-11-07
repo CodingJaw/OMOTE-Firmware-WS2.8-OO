@@ -9,6 +9,7 @@ import unittest
 BASE=Path(__file__).resolve().parents[2]
 PIO=BASE/"platformio.ini"
 PROBE=BASE/"src/receipt_mbedtls_compile_probe.cpp"
+CMAKE=BASE/"src/CMakeLists.txt"
 
 
 class WaveshareReceiptBuildGuards(unittest.TestCase):
@@ -25,6 +26,7 @@ class WaveshareReceiptBuildGuards(unittest.TestCase):
         self.assertIn("-I tools/config-v2-tests",environment.get("build_flags"))
         self.assertIn("-D OMOTE_RECEIPT_MBEDTLS_COMPILE_PROBE=1",environment.get("build_flags"))
         self.assertIn("#if defined(OMOTE_RECEIPT_MBEDTLS_COMPILE_PROBE)",PROBE.read_text())
+        self.assertIn("-DOMOTE_RECEIPT_COMPILE_PROBE=ON",environment.get("board_build.cmake_extra_args"))
         self.assertNotIn("receipt_mbedtls_compile_probe.cpp",
                          settings["env:waveshare28v2_omote"].get("build_src_filter",""))
 
@@ -51,6 +53,7 @@ class WaveshareReceiptBuildGuards(unittest.TestCase):
         self.assertIn("+<receipt_mbedtls_device_lab.cpp>",env.get("build_src_filter"))
         self.assertIn("-D OMOTE_RECEIPT_MBEDTLS_DEVICE_LAB=1",env.get("build_flags"))
         self.assertIn("#if defined(OMOTE_RECEIPT_MBEDTLS_DEVICE_LAB)",src)
+        self.assertIn("-DOMOTE_RECEIPT_DEVICE_LAB=ON",env.get("board_build.cmake_extra_args"))
         for item in vectors:
             self.assertIn(item["public_key_sec1_hex"],src)
             self.assertIn(item["signature_der_hex"],src)
@@ -61,6 +64,20 @@ class WaveshareReceiptBuildGuards(unittest.TestCase):
                           "Update.begin(", "LittleFS.begin("):
             self.assertNotIn(forbidden,src)
         self.assertIn("paired=0 deployment=0 ota=0 efuse=0",src)
+
+    def test_cmake_selects_only_intended_espidf_sources(self):
+        source=CMAKE.read_text()
+        self.assertIn("if(OMOTE_RECEIPT_DEVICE_LAB AND OMOTE_RECEIPT_COMPILE_PROBE)",source)
+        self.assertIn("if(OMOTE_RECEIPT_DEVICE_LAB)",source)
+        self.assertIn("elseif(OMOTE_RECEIPT_COMPILE_PROBE)",source)
+        self.assertIn("else()",source)
+        self.assertIn('set(app_sources "${CMAKE_CURRENT_LIST_DIR}/receipt_mbedtls_device_lab.cpp")',source)
+        self.assertIn('set(app_sources "${CMAKE_CURRENT_LIST_DIR}/main.cpp")',source)
+        self.assertIn('"${CMAKE_CURRENT_LIST_DIR}/receipt_mbedtls_compile_probe.cpp"',source)
+        self.assertIn("SRCS ${app_sources}",source)
+        self.assertLess(source.index("if(OMOTE_RECEIPT_DEVICE_LAB)"),
+                        source.index("elseif(OMOTE_RECEIPT_COMPILE_PROBE)"))
+        self.assertNotIn("FILE(GLOB_RECURSE",source)
 
     def test_existing_lab_environment_does_not_inherit_probe(self):
         settings=configparser.ConfigParser(interpolation=None,strict=False)
