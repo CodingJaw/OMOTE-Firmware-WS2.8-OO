@@ -6,6 +6,11 @@ on:
       - 'Platformio/tools/config-v2-tests/enrollment_receipt_*'
       - 'Platformio/tools/config-v2-tests/sec2_verified_proofs_transcript*'
       - 'Platformio/tools/config-v2-tests/sec2_mutual_transaction_proof_v2*'
+      - 'Platformio/tools/config-v2-tests/sec2_tx_v2_*'
+      - 'Platformio/tools/config-v2-tests/test_sec2_tx_v2_*.py'
+      - 'Platformio/lib/WaveshareOmote/config_v2_sec2_tx_v2_lab.*'
+      - 'Platformio/lib/WaveshareOmote/config_v2_sec2_lab_device_identity.*'
+      - 'Platformio/lib/WaveshareOmote/config_v2_sec2_lab_transport.*'
       - 'Platformio/tools/config-v2-tests/test_sec2_mutual_transaction_proof_v2.py'
       - 'Platformio/tools/config-v2-tests/test_sec2_verified_proofs_transcript.py'
       - 'Platformio/tools/config-v2-tests/test_sec2_verified_proofs_crosslang.py'
@@ -51,6 +56,12 @@ jobs:
             -p 'test_sec2_verified_proofs_crosslang.py' -v
           python3 -m unittest discover -s Platformio/tools/config-v2-tests \
             -p 'test_sec2_mutual_transaction_proof_v2.py' -v
+          python3 -m unittest discover -s Platformio/tools/config-v2-tests \
+            -p 'test_sec2_tx_v2_lab_client.py' -v
+          python3 -m unittest discover -s Platformio/tools/config-v2-tests \
+            -p 'test_sec2_tx_v2_runtime_guards.py' -v
+          python3 -m unittest discover -s Platformio/tools/config-v2-tests \
+            -p 'test_sec2_lab_boundary.py' -v
       - name: Verify firmware remains disconnected from receipt code
         run: |
           python3 - <<'PY'
@@ -85,3 +96,6 @@ jobs:
       - name: Compile isolated serial-only diagnostic image without flashing
         run: |
           pio run -d Platformio -e waveshare28v2_omote_sec2_receipt_device_lab
+      - name: Compile opt-in dual-signed live Security2 v2 LAB, never upload
+        run: |
+          pio run -d Platformio -e waveshare28v2_omote_sec2_tx_v2_lab
