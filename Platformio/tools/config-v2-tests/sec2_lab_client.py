@@ -24,6 +24,7 @@ import sys
 
 from sec2_lab_ha_proof import make_candidate_proof, check_lab_reply
 from sec2_lab_device_proof import make_challenge, verify_device_proof
+from sec2_tx_v2_lab_client import LabV2Transaction
 
 
 class LabSetupError(RuntimeError):
@@ -48,6 +49,7 @@ _HINTS = {
     "encrypted-probe": "SRP may have completed but AES-GCM probe verification failed. Do not claim pairing success.",
     "ha-key-proof": "The optional P-256 candidate-key proof failed. It is not production pairing.",
     "device-key-proof": "The experimental device software key proof failed. Do not pin or trust this key.",
+    "tx-v2-lab": "The opt-in Security2 v2 transaction proof failed. Check that the device was flashed with waveshare28v2_omote_sec2_tx_v2_lab; do not mark paired.",
 }
 
 
@@ -108,7 +110,8 @@ def _official_provisioning_modules():
 
 
 async def probe(
-    host: str, port: int, *, ha_proof: bool = False, device_proof: bool = False
+    host: str, port: int, *, ha_proof: bool = False, device_proof: bool = False,
+    tx_v2_lab: bool = False
 ) -> None:
     Security2, Transport_HTTP = _official_provisioning_modules()
     stage = "connect"
@@ -190,6 +193,28 @@ async def probe(
         if ha_proof and device_proof:
             print("Compare the candidate HA fingerprint with the Waveshare screen.")
             print("Touchscreen Review OK is only a LAB acknowledgement; NOT enrollment.")
+        if tx_v2_lab:
+            stage = "tx-v2-lab"
+            # The transport's Cookie is the current Security2 session.
+            # Requiring a matching cookie on the OPEN response prevents
+            # substituting an unauthenticated or stale session identifier.
+            tx = LabV2Transaction(tp.headers.get("Cookie", ""))
+            opened = sec.encrypt_data(tx.open_request())
+            response = await tp.send_data(
+                "omote-tx2-open", opened.decode("latin-1"))
+            opened_plain = sec.decrypt_data(response.encode("latin-1"))
+            committed = sec.encrypt_data(tx.commit_request(opened_plain))
+            response = await tp.send_data(
+                "omote-tx2-commit", committed.decode("latin-1"))
+            commit_plain = sec.decrypt_data(response.encode("latin-1"))
+            result = tx.check_commit(commit_plain)
+            if result["paired"] or result["trusted"] or result["deployment_enabled"]:
+                raise ValueError("LAB erroneously returned authorization")
+            print("PASS: both P-256 signatures bind the same live Security2 lab transaction.")
+            print("PASS: device and HA derived identical verified transcript SHA-256.")
+            print(f"LAB ONLY SHA-256 transcript: {result['session_transcript_sha256']}")
+            print("NOT PAIRED: no HA trust, device trust, deployment or OTA.")
+
         print("No production device/HA identity, pairing trust, or configuration writes were tested.")
     except Exception as exc:
         raise LabProbeError(stage, type(exc).__name__) from None
@@ -206,6 +231,8 @@ def main() -> int:
                     help="Also verify ephemeral HA P-256 key possession (NOT trusted pairing)")
     ap.add_argument("--device-proof", action="store_true",
                     help="Also verify LAB software device-key possession (NOT trusted identity)")
+    ap.add_argument("--tx-v2-lab", action="store_true",
+                    help="Run opt-in encrypted mutual transaction v2 signature lab; never pair")
     ap.add_argument("--ack-lab-only", action="store_true",
                     help="Acknowledge this is NOT authenticated OMOTE pairing")
     ap.add_argument("--check-prereqs", action="store_true",
@@ -237,6 +264,7 @@ def main() -> int:
         asyncio.run(probe(
             args.host, args.port,
             ha_proof=args.ha_proof, device_proof=args.device_proof,
+            tx_v2_lab=args.tx_v2_lab,
         ))
     except LabSetupError as exc:
         print(f"FAIL [prerequisites]: {exc}", file=sys.stderr)
