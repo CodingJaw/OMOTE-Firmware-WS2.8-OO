@@ -16,6 +16,9 @@
 #include "config_v2_sec2_lab_budget.hpp"
 #include "config_v2_sec2_lab_device_identity.hpp"
 #include "config_v2_sec2_lab_mutual_review.hpp"
+#if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
+#include "config_v2_sec2_tx_v2_lab.hpp"
+#endif
 #include <mutex>
 #endif
 #include "protocomm.h"
@@ -32,6 +35,10 @@ constexpr char kVersionEndpoint[] = "proto-ver";
 constexpr char kProbeEndpoint[] = "omote-probe";
 constexpr char kCandidateProofEndpoint[] = "omote-ha-proof";
 constexpr char kDeviceProofEndpoint[] = "omote-device-proof";
+#if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
+constexpr char kTxV2OpenEndpoint[] = "omote-tx2-open";
+constexpr char kTxV2CommitEndpoint[] = "omote-tx2-commit";
+#endif
 
 class Probe {
 public:
@@ -69,6 +76,14 @@ private:
   static esp_err_t deviceProofRequest(
       std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
       std::uint8_t **output, ssize_t *outLen, void *ctx);
+#if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
+  static esp_err_t txV2OpenRequest(
+      std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+      std::uint8_t **output, ssize_t *outLen, void *ctx);
+  static esp_err_t txV2CommitRequest(
+      std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+      std::uint8_t **output, ssize_t *outLen, void *ctx);
+#endif
   static esp_err_t candidateProofRequest(
       std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
       std::uint8_t **output, ssize_t *outLen, void *ctx);
@@ -89,6 +104,9 @@ private:
   config_v2_sec2_lab_device_identity::Identity deviceIdentity_;
   std::mutex reviewMutex_;
   config_v2_sec2_lab_mutual_review::Review labReview_;
+#if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
+  config_v2_sec2_tx_v2_lab::Coordinator txV2_;
+#endif
   static Probe *activeLab_;
 #endif
 };
