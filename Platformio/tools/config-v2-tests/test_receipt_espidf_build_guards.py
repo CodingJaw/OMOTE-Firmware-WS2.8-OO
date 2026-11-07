@@ -37,6 +37,27 @@ class WaveshareReceiptBuildGuards(unittest.TestCase):
         self.assertIn("!production_pairing_enabled()",source)
         self.assertIn("!device_write_enabled()",source)
 
+    def test_standalone_serial_vectors_match_pinned_public_fixture(self):
+        import json
+        vectors=json.loads((BASE/"tools/config-v2-tests/enrollment_receipt_vectors_v1.json").read_text())["vectors"]
+        src=(BASE/"src/receipt_mbedtls_device_lab.cpp").read_text()
+        settings=configparser.ConfigParser(interpolation=None,strict=False)
+        settings.read(PIO)
+        env=settings["env:waveshare28v2_omote_sec2_receipt_device_lab"]
+        self.assertEqual(env.get("extends"),"env:waveshare28v2_omote")
+        self.assertIn("-<*>",env.get("build_src_filter"))
+        self.assertIn("+<receipt_mbedtls_device_lab.cpp>",env.get("build_src_filter"))
+        for item in vectors:
+            self.assertIn(item["public_key_sec1_hex"],src)
+            self.assertIn(item["signature_der_hex"],src)
+            self.assertIn(item["body"]["ha_key_sha256"],src)
+            self.assertIn(item["body"]["device_key_sha256"],src)
+        for forbidden in ("nvs_set_blob(", "nvs_open(", "esp_efuse",
+                          "WiFi.begin(", "httpd_register_uri_handler(",
+                          "Update.begin(", "LittleFS.begin("):
+            self.assertNotIn(forbidden,src)
+        self.assertIn("paired=0 deployment=0 ota=0 efuse=0",src)
+
     def test_existing_lab_environment_does_not_inherit_probe(self):
         settings=configparser.ConfigParser(interpolation=None,strict=False)
         settings.read(PIO)
