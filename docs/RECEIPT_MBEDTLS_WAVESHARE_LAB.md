@@ -129,6 +129,22 @@ The serial output should include:
 Any `valid=0`, `tamper_refused=0`, `session_refused=0` or
 `FINAL FAIL` is a failure. Do not proceed to real enrollment.
 
+## Capture newline parsing fix (2026-11-07)
+
+The first repeat/reconnect capture unit test reported 3/6 failures
+because the Python utility checked for literal backslash+n
+(`b"\\\\n"`) rather than a real LF byte (`b"\\n"`). This was a **host
+capture utility defect**, not a firmware ECDSA failure. Corrected the
+byte matching and now require a newline-terminated banner, HA result,
+device result and FINAL from the same diagnostic cycle before ending
+capture. Added tests for CRLF, incomplete frames, mixed sessions and
+fragmented serial reads.
+
+**No new firmware upload is required for this Python-only fix.**
+The repeating diagnostic image can stay on the device. Pull the feature
+branch, rerun `test_receipt_serial_capture.py` (now 9 tests), then run
+the capture utility and pass the resulting log to the offline checker.
+
 ## USB disconnect on reset — recurring serial report fix (2026-11-07)
 
 The physical Waveshare uses ESP32-S3 USB-Serial/JTAG. Pressing RESET
