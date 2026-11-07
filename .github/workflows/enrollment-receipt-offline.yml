@@ -5,6 +5,8 @@ on:
     paths:
       - 'Platformio/tools/config-v2-tests/enrollment_receipt_*'
       - 'Platformio/tools/config-v2-tests/test_receipt_espidf_build_guards.py'
+      - 'Platformio/tools/config-v2-tests/*receipt_device_serial.py'
+      - 'Platformio/tools/config-v2-tests/check_receipt_device_serial.py'
       - 'Platformio/src/receipt_mbedtls_*.cpp'
       - 'Platformio/platformio.ini'
       - '.github/workflows/enrollment-receipt-offline.yml'
@@ -30,6 +32,8 @@ jobs:
             -p 'test_enrollment_receipt_contract.py' -v
           python3 -m unittest discover -s Platformio/tools/config-v2-tests \
             -p 'test_receipt_espidf_build_guards.py' -v
+          python3 -m unittest discover -s Platformio/tools/config-v2-tests \
+            -p 'test_receipt_device_serial.py' -v
       - name: Verify firmware remains disconnected from receipt code
         run: |
           python3 - <<'PY'
