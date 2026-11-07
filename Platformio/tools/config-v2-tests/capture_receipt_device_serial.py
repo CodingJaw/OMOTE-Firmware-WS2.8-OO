@@ -37,7 +37,7 @@ def has_complete_report(data: bytes | bytearray) -> bool:
     have_device = False
     complete = False
     for raw in data.splitlines(keepends=True):
-        if not raw.endswith(b"\\n"):
+        if not raw.endswith(b"\n"):
             continue
         line = raw.strip()
         if line == BANNER:
