@@ -9,10 +9,9 @@
 #include "enrollment_receipt_verify_draft.hpp"
 using namespace omote_receipt_offline;
 
-void setup() {
-  Serial.begin(115200);
-  const uint32_t since=millis();
-  while (!Serial && millis()-since < 1800) delay(10);
+// Results are repeated so USB-CDC re-enumeration cannot hide boot-only
+// diagnostics. Each report is a complete independent test run, not pairing.
+static void report_receipts() {
   Serial.println("[RECEIPT-LAB] isolated firmware mbedTLS offline vector verification");
   bool all_ok=true;
   {
@@ -72,6 +71,15 @@ void setup() {
   Serial.printf("[RECEIPT-LAB] FINAL %s; paired=0 deployment=0 ota=0 efuse=0\n",
                 all_ok ? "PASS" : "FAIL");
 }
-void loop() { delay(1000); }
+void setup() {
+  Serial.begin(115200);
+  const uint32_t since=millis();
+  while (!Serial && millis()-since < 1800) delay(10);
+  report_receipts();
+}
+void loop() {
+  delay(3000);
+  report_receipts();
+}
 
 #endif // OMOTE_RECEIPT_MBEDTLS_DEVICE_LAB
