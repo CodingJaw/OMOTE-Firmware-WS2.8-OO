@@ -57,7 +57,13 @@ class PairingLifecycleContractTests(unittest.TestCase):
         d = self.data
         self.assertEqual(d["scope"],
                          "offline_policy_only_no_trust_persistence_or_network_registration")
-        self.assertFalse(any(d["authorization"].values()))
+        self.assertTrue(d["authorization"]["laboratory_only"])
+        production = {
+            name: enabled for name, enabled in d["authorization"].items()
+            if name != "laboratory_only"
+        }
+        self.assertTrue(production)
+        self.assertFalse(any(production.values()))
         self.assertTrue(d["rules"]["require_device_identity_hardware_protection_before_trust"])
         self.assertTrue(d["rules"]["require_mutual_durable_commit_before_paired"])
         self.assertTrue(d["rules"]["require_ha_admin_approval"])
