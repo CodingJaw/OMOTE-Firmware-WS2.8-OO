@@ -15,6 +15,10 @@ Date: 2026-11-07. Branch: `feature/config-v2-transactional`.
 Both use the existing Waveshare Arduino + ESP-IDF toolchain, so the
 firmware's mbedTLS code path compiles rather than the host OpenSSL path.
 
+Both new C++ source files are additionally protected by separate
+compile-time macros. Normal Waveshare, Rev1/Rev5 and simulator builds do
+not enable these probes, even if a build environment scans the source tree.
+
 ### 1. Compile-only integration check — safe, no flash
 
 From the firmware repository:
