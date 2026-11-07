@@ -1,0 +1,40 @@
+name: Offline Security2 receipt interoperability
+on:
+  push:
+    branches: ['feature/config-v2-transactional']
+    paths:
+      - 'Platformio/tools/config-v2-tests/enrollment_receipt_*'
+      - '.github/workflows/enrollment-receipt-offline.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host-receipt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install C++ host crypto headers
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev g++
+      - name: Compile and verify both canonical signed C++ vectors
+        run: |
+          python3 -m unittest discover -s Platformio/tools/config-v2-tests \
+            -p 'test_enrollment_receipt_crosslang.py' -v
+          python3 -m unittest discover -s Platformio/tools/config-v2-tests \
+            -p 'test_enrollment_receipt_contract.py' -v
+      - name: Verify firmware remains disconnected from receipt code
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('Platformio')
+          header = 'enrollment_receipt_verify_draft.hpp'
+          # Only the isolated harness may include the offline verifier.
+          uses = [str(p) for p in root.rglob('*')
+                  if p.is_file() and p.suffix in ('.cpp','.hpp','.h')
+                  and p.name not in ('enrollment_receipt_verify_host.cpp',header)
+                  and header in p.read_text(errors='replace')]
+          assert not uses, 'Offline crypto header linked to other firmware sources: '+str(uses)
+          PY
