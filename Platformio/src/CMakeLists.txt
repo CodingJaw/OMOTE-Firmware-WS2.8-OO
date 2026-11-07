@@ -24,5 +24,5 @@ endif()
 
 idf_component_register(
     SRCS ${app_sources}
-    REQUIRES arduino mbedtls espressif__esp_websocket_client espressif__mdns joltwallet__littlefs
+    REQUIRES mbedtls espressif__esp_websocket_client espressif__mdns joltwallet__littlefs
 )
