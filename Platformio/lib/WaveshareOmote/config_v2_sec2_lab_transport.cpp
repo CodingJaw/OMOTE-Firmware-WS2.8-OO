@@ -216,6 +216,52 @@ esp_err_t Probe::candidateProofRequest(
   return ESP_OK;
 }
 
+#if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
+// Both callbacks execute only after protocomm has decrypted and authenticated
+// the current Security2 session. They never return credentials or authorize
+// configuration changes. The local transaction coordinator enforces matching
+// session IDs, a fresh device-generated transaction and one-shot completion.
+esp_err_t Probe::txV2OpenRequest(
+    std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+    std::uint8_t **output, ssize_t *outLen, void *ctx) {
+  auto *self=static_cast<Probe *>(ctx);
+  if (!self || !self->active() || !output || !outLen || !input ||
+      inLen<=0 || static_cast<std::uint32_t>(
+          millis()-self->startedAtMs_)>=kMaxWindowMs)
+    return ESP_ERR_INVALID_STATE;
+  std::vector<std::uint8_t> response;
+  if (!self->txV2_.open(session,input,static_cast<std::size_t>(inLen),
+                         millis(),self->deviceIdentity_,response))
+    return ESP_ERR_INVALID_ARG;
+  auto *buffer=static_cast<std::uint8_t *>(std::malloc(response.size()));
+  if (!buffer) return ESP_ERR_NO_MEM;
+  std::memcpy(buffer,response.data(),response.size());
+  *output=buffer;
+  *outLen=static_cast<ssize_t>(response.size());
+  return ESP_OK;
+}
+
+esp_err_t Probe::txV2CommitRequest(
+    std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+    std::uint8_t **output, ssize_t *outLen, void *ctx) {
+  auto *self=static_cast<Probe *>(ctx);
+  if (!self || !self->active() || !output || !outLen || !input ||
+      inLen<=0 || static_cast<std::uint32_t>(
+          millis()-self->startedAtMs_)>=kMaxWindowMs)
+    return ESP_ERR_INVALID_STATE;
+  std::vector<std::uint8_t> response;
+  if (!self->txV2_.commit(session,input,static_cast<std::size_t>(inLen),
+                           millis(),self->deviceIdentity_,response))
+    return ESP_ERR_INVALID_ARG;
+  auto *buffer=static_cast<std::uint8_t *>(std::malloc(response.size()));
+  if (!buffer) return ESP_ERR_NO_MEM;
+  std::memcpy(buffer,response.data(),response.size());
+  *output=buffer;
+  *outLen=static_cast<ssize_t>(response.size());
+  return ESP_OK;
+}
+#endif
+
 bool Probe::startFromTrustedLocalTouch(const char *pin,
                                       std::size_t len,
                                       std::uint32_t nowMs) {
@@ -286,6 +332,14 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   if (good)
     good = protocomm_add_endpoint(
         candidate, kDeviceProofEndpoint, deviceProofRequest, this) == ESP_OK;
+#if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
+  if (good)
+    good = protocomm_add_endpoint(
+        candidate,kTxV2OpenEndpoint,txV2OpenRequest,this) == ESP_OK;
+  if (good)
+    good = protocomm_add_endpoint(
+        candidate,kTxV2CommitEndpoint,txV2CommitRequest,this) == ESP_OK;
+#endif
 
   if (!good) {
     // Never wipe salt/verifier while Security2 might still be using them.
@@ -314,6 +368,9 @@ void Probe::tick(std::uint32_t nowMs) {
 }
 
 void Probe::stop() {
+#if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
+  txV2_.close();
+#endif
   if (!pc_) {
     if (activeLab_ == this) activeLab_ = nullptr;
     {
