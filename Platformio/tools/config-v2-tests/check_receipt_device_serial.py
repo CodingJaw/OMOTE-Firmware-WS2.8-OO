@@ -40,8 +40,13 @@ def assess(text: str) -> tuple[bool, str]:
     finals = []
     for raw in lines:
         line = raw.strip()
-        if line == BANNER and seen:
-            return False, "duplicate-boot-banner"
+        if line == BANNER:
+            # The selected boot banner marks the beginning of this session;
+            # it is not an unknown result. A later banner restarts the run
+            # and must not allow prior peer results to be reused.
+            if seen or finals:
+                return False, "duplicate-boot-banner"
+            continue
         match = CHECK.fullmatch(line)
         if match:
             role = match.group(1)
