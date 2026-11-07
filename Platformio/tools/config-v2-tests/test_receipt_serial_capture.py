@@ -97,11 +97,11 @@ class ReceiptSerialCaptureTests(unittest.TestCase):
 
     def test_newline_terminated_report_and_bytearray_detection(self):
         self.assertTrue(capture_mod.has_complete_report(bytearray(GOOD)))
-        self.assertTrue(capture_mod.has_complete_report(GOOD.replace(b"\\n", b"\\r\\n")))
-        self.assertFalse(capture_mod.has_complete_report(GOOD.rstrip(b"\\n")))
+        self.assertTrue(capture_mod.has_complete_report(GOOD.replace(b"\n", b"\r\n")))
+        self.assertFalse(capture_mod.has_complete_report(GOOD.rstrip(b"\n")))
         # The previous bug searched for a literal backslash and 'n' rather
         # than the wire's newline byte; guard exact delimiter semantics.
-        self.assertFalse(capture_mod.has_complete_report(GOOD.replace(b"\\n", b"\\\\n")))
+        self.assertFalse(capture_mod.has_complete_report(GOOD.replace(b"\n", b"\n")))
 
     def test_cannot_combine_reports_across_new_banner(self):
         incomplete = BANNER + HA + BANNER + DEVICE + FINAL
