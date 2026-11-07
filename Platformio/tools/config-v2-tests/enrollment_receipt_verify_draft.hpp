@@ -10,6 +10,7 @@
 #include <vector>
 #if defined(OMOTE_RECEIPT_HOST_OPENSSL)
 #include <openssl/evp.h>
+#include <openssl/sha.h>
 #include <openssl/x509.h>
 #else
 #include "mbedtls/md.h"
@@ -120,6 +121,24 @@ inline bool verify_signature(const std::string& payload,
     return ok;
 #endif
 }
+inline bool public_fingerprint(const std::string& sec1hex,std::string& out) {
+    if (!ishex(sec1hex,130) || sec1hex.substr(0,2)!="04") return false;
+    std::vector<unsigned char> sec1;
+    if (!unhex(sec1hex,sec1)) return false;
+    unsigned char digest[32];
+#if defined(OMOTE_RECEIPT_HOST_OPENSSL)
+    if (!SHA256(sec1.data(),sec1.size(),digest)) return false;
+#else
+    const mbedtls_md_info_t* md=mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    if (!md || mbedtls_md(md,sec1.data(),sec1.size(),digest)!=0) return false;
+#endif
+    static const char hexchars[]="0123456789abcdef";
+    out.clear();out.reserve(64);
+    for (unsigned char c: digest) {
+        out.push_back(hexchars[c>>4]);out.push_back(hexchars[c&15]);
+    }
+    return true;
+}
 inline bool verify(const Body& b, const Expected& e,
                    const std::string& verified_peer_sec1hex,
                    const std::string& signature_der_hex) {
@@ -128,10 +147,11 @@ inline bool verify(const Body& b, const Expected& e,
         b.device_key_sha256!=e.device_key_sha256 ||
         b.session_transcript_sha256!=e.session_transcript_sha256 ||
         b.signer!=e.signer) return false;
-    // Signature verification alone does not prove hardware identity.
-    // Peer key fingerprint must be independently pinned in production.
-    // This isolated test takes that fingerprint as a separately validated
-    // context input and deliberately does not claim trust.
+    std::string calculated_fingerprint;
+    if (!public_fingerprint(verified_peer_sec1hex,calculated_fingerprint)) return false;
+    if (calculated_fingerprint != (b.signer=="ha" ? e.ha_key_sha256 : e.device_key_sha256))
+        return false;
+    // This proves only possession of a software-verified key, not trust.
     return verify_signature(canonical(b),verified_peer_sec1hex,signature_der_hex);
 }
 inline bool production_pairing_enabled() { return false; }
