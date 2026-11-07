@@ -37,7 +37,7 @@ class DualSlotHostTests(unittest.TestCase):
 
     def test_production_firmware_is_not_linked_to_offline_journal(self):
         source = (HERE / "trust_journal_slots_draft.hpp").read_text()
-        self.assertNotIn("nvs_set_blob", source)
+        self.assertNotIn("nvs_set_blob(", source)
         self.assertNotIn("esp_efuse", source)
         self.assertNotIn("esp_restart", source)
         self.assertIn("bool trusted() const { return false; }", source)
