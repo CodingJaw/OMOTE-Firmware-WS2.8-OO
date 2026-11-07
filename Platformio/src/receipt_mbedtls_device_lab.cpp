@@ -37,7 +37,7 @@ void setup() {
     Expected wrong_session=expected;
     wrong_session.session_transcript_sha256=std::string(64,'f');
     const bool session_refused=!verify(b,wrong_session,public_key,signature);
-    Serial.printf("[RECEIPT-LAB] ha valid=%d tamper_refused=%d session_refused=%d\\n",
+    Serial.printf("[RECEIPT-LAB] ha valid=%d tamper_refused=%d session_refused=%d\n",
                   valid_sig,tamper_refused,session_refused);
     all_ok=all_ok && valid_sig && tamper_refused && session_refused;
   }
@@ -64,11 +64,11 @@ void setup() {
     Expected wrong_session=expected;
     wrong_session.session_transcript_sha256=std::string(64,'f');
     const bool session_refused=!verify(b,wrong_session,public_key,signature);
-    Serial.printf("[RECEIPT-LAB] device valid=%d tamper_refused=%d session_refused=%d\\n",
+    Serial.printf("[RECEIPT-LAB] device valid=%d tamper_refused=%d session_refused=%d\n",
                   valid_sig,tamper_refused,session_refused);
     all_ok=all_ok && valid_sig && tamper_refused && session_refused;
   }
-  Serial.printf("[RECEIPT-LAB] FINAL %s; paired=0 deployment=0 ota=0 efuse=0\\n",
+  Serial.printf("[RECEIPT-LAB] FINAL %s; paired=0 deployment=0 ota=0 efuse=0\n",
                 all_ok ? "PASS" : "FAIL");
 }
 void loop() { delay(1000); }
