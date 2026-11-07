@@ -216,5 +216,37 @@ bool Identity::signSessionChallenge(
   return true;
 }
 
+#if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
+bool Identity::copyLabPublicKey(std::uint8_t *out65,
+                                std::size_t capacity) const {
+  if (!ready_ || !out65 || capacity < kPublicBytes) return false;
+  std::memcpy(out65, public_, kPublicBytes);
+  return true;
+}
+
+bool Identity::signVerifiedLabDigest(
+    const std::uint8_t *digest32, std::uint8_t *signature,
+    std::size_t capacity, std::size_t &signatureLength) const {
+  signatureLength = 0;
+  if (!ready_ || !digest32 || !signature || capacity < kMaxSignatureBytes)
+    return false;
+  // The private key is reconstructed exactly like the existing challenge
+  // signer and never exported. The transport, not this primitive, must
+  // validate the HA proof and derive the locally generated digest first.
+  Crypto crypto;
+  SecretRecord temporary;
+  temporary.bytes[0] = kVersion;
+  std::memcpy(temporary.bytes.data() + 1, private_, kPrivateBytes);
+  std::memcpy(temporary.bytes.data() + 1 + kPrivateBytes,
+              public_, kPublicBytes);
+  if (!validate(crypto, temporary)) return false;
+  return mbedtls_ecdsa_write_signature(
+             &crypto.key, MBEDTLS_MD_SHA256, digest32, 32,
+             signature, capacity, &signatureLength,
+             mbedtls_ctr_drbg_random, &crypto.rng) == 0 &&
+         signatureLength >= 8 && signatureLength <= kMaxSignatureBytes;
+}
+#endif
+
 } // namespace config_v2_sec2_lab_device_identity
 #endif
