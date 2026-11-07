@@ -19,6 +19,40 @@ import sys
 import time
 
 
+BANNER = b"[RECEIPT-LAB] isolated firmware mbedTLS offline vector verification"
+HA_PREFIX = b"[RECEIPT-LAB] ha valid="
+DEVICE_PREFIX = b"[RECEIPT-LAB] device valid="
+FINAL_PREFIX = b"[RECEIPT-LAB] FINAL "
+
+
+def has_complete_report(data: bytes | bytearray) -> bool:
+    """Require complete, newline-terminated role results within one report.
+
+    The serial port may be opened halfway through an earlier report.
+    A new BANNER resets state; never combine different report cycles.
+    The separate acceptance checker still validates the result values.
+    """
+    started = False
+    have_ha = False
+    have_device = False
+    complete = False
+    for raw in data.splitlines(keepends=True):
+        if not raw.endswith(b"\\n"):
+            continue
+        line = raw.strip()
+        if line == BANNER:
+            started = True
+            have_ha = have_device = False
+            complete = False
+        elif started and line.startswith(HA_PREFIX):
+            have_ha = True
+        elif started and line.startswith(DEVICE_PREFIX):
+            have_device = True
+        elif started and line.startswith(FINAL_PREFIX):
+            complete = have_ha and have_device
+    return complete
+
+
 def capture(port: str, output: Path, seconds: float, baud: int = 115200) -> int:
     # Import at runtime so unit tests and offline parser work without pyserial.
     try:
@@ -68,16 +102,10 @@ def capture(port: str, output: Path, seconds: float, baud: int = 115200) -> int:
                             captured.extend(chunk)
                             sys.stdout.write(chunk.decode("utf-8", errors="replace"))
                             sys.stdout.flush()
-                            # A final diagnostic line is emitted after each
-                            # complete crypto check. Return at its newline
-                            # boundary so a second, partial cycle does not
-                            # invalidate the final parser check.
-                            for line in captured.splitlines(keepends=True):
-                                if (line.endswith(b"\\n") and
-                                    b"[RECEIPT-LAB] FINAL " in line and
-                                    b"[RECEIPT-LAB] isolated firmware mbedTLS offline vector verification" in captured):
-                                    complete = True
-                                    break
+                            # Stop only after two role results and a FINAL
+                            # from the same complete, newline-terminated
+                            # report. A pre-banner FINAL cannot end capture.
+                            complete = has_complete_report(captured)
                             if complete:
                                 break
                             # Prevent unbounded memory growth with a noisy
