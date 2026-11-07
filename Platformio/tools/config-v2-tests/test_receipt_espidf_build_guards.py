@@ -66,6 +66,8 @@ class WaveshareReceiptBuildGuards(unittest.TestCase):
                           "Update.begin(", "LittleFS.begin("):
             self.assertNotIn(forbidden,src)
         self.assertIn("paired=0 deployment=0 ota=0 efuse=0",src)
+        self.assertIn("delay(3000)",src)
+        self.assertIn("report_receipts();",src)
 
     def test_cmake_selects_only_intended_espidf_sources(self):
         source=CMAKE.read_text()
