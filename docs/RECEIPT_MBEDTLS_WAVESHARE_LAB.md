@@ -10,6 +10,30 @@ Date: 2026-11-07. Branch: `feature/config-v2-transactional`.
 - Actual Waveshare ESP-IDF/mbedTLS receipt verifier build and on-device
   execution: **NOT VERIFIED YET**. Do not confuse these stages.
 
+## Important ESP-IDF CMake correction (2026-11-07)
+
+The first standalone build failed at `src/main.cpp` with
+`fatal error: IAction.hpp: No such file or directory`. PlatformIO printed
+`Warning: the 'src_filter' option cannot be used with ESP-IDF`.
+The cause was `src/CMakeLists.txt` selecting only `main.cpp`;
+`build_src_filter` does **not** control ESP-IDF source selection.
+
+The CMake source list now selects:
+- standard builds: `main.cpp` only;
+- `OMOTE_RECEIPT_COMPILE_PROBE=ON`: `main.cpp` and the actual verifier probe;
+- `OMOTE_RECEIPT_DEVICE_LAB=ON`: **only**
+  `receipt_mbedtls_device_lab.cpp`.
+
+These flags are set with `board_build.cmake_extra_args` for the respective
+opt-in environments. Both special sources are still macro-guarded.
+Because the older CMake source list did not include the compile probe, the
+previous successful compiler run did **not** prove the mbedTLS verifier
+had been compiled. Re-run that environment after pulling this fix.
+
+If an incremental build appears to use the old source list, run
+`platformio run -e <environment> -t clean` for **that environment only**,
+then build again. Cleaning does not upload or erase the device.
+
 ## Two new opt-in build targets
 
 Both use the existing Waveshare Arduino + ESP-IDF toolchain, so the
