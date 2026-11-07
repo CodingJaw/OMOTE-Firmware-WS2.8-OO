@@ -95,6 +95,32 @@ class ReceiptSerialCaptureTests(unittest.TestCase):
         self.assertEqual(result,0)
         self.assertEqual(contents,payload)
 
+    def test_newline_terminated_report_and_bytearray_detection(self):
+        self.assertTrue(capture_mod.has_complete_report(bytearray(GOOD)))
+        self.assertTrue(capture_mod.has_complete_report(GOOD.replace(b"\\n", b"\\r\\n")))
+        self.assertFalse(capture_mod.has_complete_report(GOOD.rstrip(b"\\n")))
+        # The previous bug searched for a literal backslash and 'n' rather
+        # than the wire's newline byte; guard exact delimiter semantics.
+        self.assertFalse(capture_mod.has_complete_report(GOOD.replace(b"\\n", b"\\\\n")))
+
+    def test_cannot_combine_reports_across_new_banner(self):
+        incomplete = BANNER + HA + BANNER + DEVICE + FINAL
+        self.assertFalse(capture_mod.has_complete_report(incomplete))
+        self.assertFalse(capture_mod.has_complete_report(FINAL + HA + DEVICE))
+        self.assertFalse(capture_mod.has_complete_report(BANNER + HA + FINAL))
+        self.assertTrue(capture_mod.has_complete_report(incomplete + GOOD))
+
+    def test_chunked_serial_reads_complete_only_after_final_newline(self):
+        class ChunkedSerial(FakeSerial):
+            def read(self, length):
+                self.calls += 1
+                chunks = [BANNER[:15], BANNER[15:] + HA,
+                          DEVICE + FINAL[:-1], FINAL[-1:]]
+                return chunks[self.calls-1] if self.calls <= len(chunks) else b""
+        result, contents, _ = self.capture_with_fake(lambda **kw: ChunkedSerial(**kw))
+        self.assertEqual(result, 0)
+        self.assertEqual(contents, GOOD)
+
     def test_timeout_with_no_complete_report_fails_closed(self):
         result,contents,_=self.capture_with_fake(
             lambda **kw: FakeSerial(payload=b"ESP-ROM boot\n",**kw),seconds=1)
