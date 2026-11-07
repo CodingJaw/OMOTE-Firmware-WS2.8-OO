@@ -6,6 +6,7 @@
     defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
 #include "config_v2_sec2_tx_v2_lab.hpp"
 #include <esp_system.h>
+#include <esp_random.h> // esp_fill_random() in ESP-IDF 5.3
 #include <mbedtls/ecdsa.h>
 #include <mbedtls/ecp.h>
 #include <mbedtls/sha256.h>
