@@ -74,7 +74,8 @@ def capture(port: str, output: Path, seconds: float, baud: int = 115200) -> int:
                             # invalidate the final parser check.
                             for line in captured.splitlines(keepends=True):
                                 if (line.endswith(b"\\n") and
-                                    b"[RECEIPT-LAB] FINAL " in line):
+                                    b"[RECEIPT-LAB] FINAL " in line and
+                                    b"[RECEIPT-LAB] isolated firmware mbedTLS offline vector verification" in captured):
                                     complete = True
                                     break
                             if complete:
