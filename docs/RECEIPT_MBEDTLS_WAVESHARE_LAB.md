@@ -129,6 +129,47 @@ The serial output should include:
 Any `valid=0`, `tamper_refused=0`, `session_refused=0` or
 `FINAL FAIL` is a failure. Do not proceed to real enrollment.
 
+## USB disconnect on reset — recurring serial report fix (2026-11-07)
+
+The physical Waveshare uses ESP32-S3 USB-Serial/JTAG. Pressing RESET
+disconnects the serial device from Linux while USB re-enumerates; this
+can invalidate a serial file handle and lose boot-only text.
+
+The isolated device-lab firmware now repeats **complete** receipt
+signature checks approximately every three seconds. Connect the capture
+tool **without resetting the board**. The capture tool automatically
+reopens the USB port after a transient disconnect and stops after a
+complete diagnostic FINAL line. Its data collection uses serial reads
+only, so it does not send pairing commands or write to NVS.
+
+The lab intentionally has **no LCD or touchscreen UI**. A blank Waveshare
+screen is therefore expected. The normal OMOTE display will return when
+you restore the working OMOTE firmware after the diagnostic.
+
+The firmware was modified, so a **new build and upload of the device-lab
+image is required** to obtain repeating reports. From `Platformio/`:
+
+```bash
+git pull --ff-only origin feature/config-v2-transactional
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_receipt_serial_capture.py' -v
+~/.platformio/penv/bin/platformio run \
+  -e waveshare28v2_omote_sec2_receipt_device_lab -t upload \
+  --upload-port /dev/ttyACM0
+~/.platformio/penv/bin/python \
+  tools/config-v2-tests/capture_receipt_device_serial.py \
+  --port /dev/ttyACM0 --output receipt-device-serial.log --seconds 30
+python3 tools/config-v2-tests/check_receipt_device_serial.py \
+  receipt-device-serial.log
+```
+
+**Do not press RESET while capture is running.** The output now repeats,
+so the first report observed after connecting will be sufficient.
+The capture retry timeout is bounded and can be extended to 60 seconds
+if USB enumeration is unusually slow. If Linux renumbers the device,
+check `ls -l /dev/serial/by-id/` or `ls /dev/ttyACM*` before choosing a
+new port. Do not assume a stable device name after USB reset.
+
 ## Hardware acceptance — serial log verifier (2026-11-07)
 
 The user has confirmed that the dependency-isolated `device_lab` target
@@ -153,7 +194,7 @@ If proceeding with a deliberate one-time physical test, from
   --port /dev/ttyACM0 --output receipt-device-serial.log --seconds 25
 ```
 
-The standard PlatformIO monitor is interactive and **cannot be piped to\n`tee`** (it aborts before opening the port). The new capture tool uses\nPlatformIO's Python with `pyserial` to record raw USB serial data to a\nregular file. Press the physical RESET button once **after** capture\nstarts to obtain the complete banner. The capture stops after the selected\ninterval, without sending commands. Opening a serial device can toggle\nDTR/RTS on some USB adapters; this does not program flash or eFuses.\nAn empty log simply means the diagnostic could not yet be observed.
+The standard PlatformIO monitor is interactive and **cannot be piped to\n`tee`** (it aborts before opening the port). The new capture tool uses\nPlatformIO's Python with `pyserial` to record raw USB serial data to a\nregular file, reconnecting when the USB device temporarily disappears. Press the physical RESET button once **after** capture\nstarts to obtain the complete banner. The capture stops after the selected\ninterval, without sending commands. Opening a serial device can toggle\nDTR/RTS on some USB adapters; this does not program flash or eFuses.\nAn empty log simply means the diagnostic could not yet be observed.
 
 Evaluate the captured output without needing a device connection:
 
