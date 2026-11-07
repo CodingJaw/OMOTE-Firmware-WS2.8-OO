@@ -68,7 +68,7 @@ int main() {
     assert(powercut.save(example()) == Result::WriteFailure);
     torn.shortwrite = false;
     assert(powercut.load() == Result::Corrupt); // no silent fallback
-    assert(powercut.save(example(2,'1' == '2' ? Phase::Revoked : Phase::Prepared)) == Result::Invalid);
+    assert(powercut.save(example(2)) == Result::Invalid);
 
     FakeNvs ioerror;
     Journal io(ioerror);
