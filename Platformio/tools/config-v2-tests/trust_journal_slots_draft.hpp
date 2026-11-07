@@ -82,7 +82,7 @@ inline bool decimal(const std::string& text, uint64_t& result) {
     return true;
 }
 inline bool decode(const std::string& wire, uint64_t& seq, Record& r) {
-    if (wire.size() > 512 || wire.size() < 200) return false;
+    if (wire.size() > 512 || wire.size() < 185) return false;
     std::vector<std::string> bits;
     size_t start = 0;
     for (size_t pos = 0; pos <= wire.size(); ++pos) {
