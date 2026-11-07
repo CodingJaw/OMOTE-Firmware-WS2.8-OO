@@ -34,6 +34,35 @@ If an incremental build appears to use the old source list, run
 `platformio run -e <environment> -t clean` for **that environment only**,
 then build again. Cleaning does not upload or erase the device.
 
+## Standalone library dependency isolation (2026-11-07)
+
+The first build after correcting CMake advanced into OMOTE libraries and
+failed in `lib/JsonConfigUI/screen/JsonHomeScreen.cpp` because
+`AddDevice.hpp` was unavailable. This is unrelated to receipt verification.
+The device-lab environment inherited `lib_deps` from the full Waveshare
+OMOTE target, causing PlatformIO to compile UI and device libraries.
+
+The standalone test now explicitly overrides `lib_deps` with an empty
+list and clears inherited `lib_ignore`. In `src/CMakeLists.txt`, the
+device-lab branch requires `mbedtls` only, while ordinary OMOTE retains
+its previous WebSocket, mDNS and LittleFS requirements. No production
+configuration or source is changed.
+
+After pulling this fix, clean ONLY the failed standalone environment to
+invalidate cached dependencies:
+
+```bash
+cd Platformio
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote_sec2_receipt_device_lab -t clean
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote_sec2_receipt_device_lab
+```
+
+The `src_filter` warning may still appear because ESP-IDF ignores it.
+CMake selects the standalone source file, and the program must not compile
+`JsonHomeScreen.cpp`, `AddDevice.hpp`, or the normal OMOTE `main.cpp`.
+Report any further **first fatal error** instead of attempting to upload.
+These revised build settings have not yet been verified by the user.
+
 ## Two new opt-in build targets
 
 Both use the existing Waveshare Arduino + ESP-IDF toolchain, so the
