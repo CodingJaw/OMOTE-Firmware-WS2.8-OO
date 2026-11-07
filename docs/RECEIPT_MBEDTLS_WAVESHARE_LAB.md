@@ -129,6 +129,60 @@ The serial output should include:
 Any `valid=0`, `tamper_refused=0`, `session_refused=0` or
 `FINAL FAIL` is a failure. Do not proceed to real enrollment.
 
+## Hardware acceptance — serial log verifier (2026-11-07)
+
+The user has confirmed that the dependency-isolated `device_lab` target
+and prior guard checks build successfully. **No physical-device serial
+result has yet been provided.** A successful build is not proof that
+ESP32 mbedTLS executes signatures correctly.
+
+Before flashing, preserve a tested way to reinstall the working
+OMOTE firmware, and make sure you understand that this **overwrites
+the running app image**. The diagnostic does not intentionally write
+NVS, change eFuses, connect to Home Assistant, or enable pairing.
+
+If proceeding with a deliberate one-time physical test, from
+`Platformio/`:
+
+```bash
+~/.platformio/penv/bin/platformio run \
+  -e waveshare28v2_omote_sec2_receipt_device_lab \
+  -t upload --upload-port /dev/ttyACM0
+
+~/.platformio/penv/bin/platformio device monitor \
+  -p /dev/ttyACM0 -b 115200 | tee receipt-device-serial.log
+```
+
+If no results appear, press the physical reset button once **after**
+the monitor is connected. After complete output appears, stop
+monitoring with Ctrl+C.
+
+Evaluate the captured output without needing a device connection:
+
+```bash
+python3 tools/config-v2-tests/check_receipt_device_serial.py \
+  receipt-device-serial.log
+```
+
+Expected `PASS: ON-DEVICE-OFFLINE-RECEIPT-ACCEPTED (NOT PAIRED)`.
+A missing or partial run, an incorrect public-key/session check, or
+any `FINAL FAIL` is **FAIL**. The tool treats only the last boot
+session as authoritative and never mixes results across boots.
+
+The read-only parser's own unit tests are:
+
+```bash
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_receipt_device_serial.py' -v
+```
+
+**Passing this stage does not enable live Security2 session binding,
+physical/admin approval authorization, persistent pairing,
+deployment, OTA, or eFuse operations.** Restore the proven working
+OMOTE firmware afterwards using its known working build environment
+and firmware image. Do not substitute the diagnostic binary for
+the production OMOTE image.
+
 ## Host-only guard tests
 
 ```bash
