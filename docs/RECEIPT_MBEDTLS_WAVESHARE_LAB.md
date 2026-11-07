@@ -149,13 +149,11 @@ If proceeding with a deliberate one-time physical test, from
   -e waveshare28v2_omote_sec2_receipt_device_lab \
   -t upload --upload-port /dev/ttyACM0
 
-~/.platformio/penv/bin/platformio device monitor \
-  -p /dev/ttyACM0 -b 115200 | tee receipt-device-serial.log
+~/.platformio/penv/bin/python tools/config-v2-tests/capture_receipt_device_serial.py \
+  --port /dev/ttyACM0 --output receipt-device-serial.log --seconds 25
 ```
 
-If no results appear, press the physical reset button once **after**
-the monitor is connected. After complete output appears, stop
-monitoring with Ctrl+C.
+The standard PlatformIO monitor is interactive and **cannot be piped to\n`tee`** (it aborts before opening the port). The new capture tool uses\nPlatformIO's Python with `pyserial` to record raw USB serial data to a\nregular file. Press the physical RESET button once **after** capture\nstarts to obtain the complete banner. The capture stops after the selected\ninterval, without sending commands. Opening a serial device can toggle\nDTR/RTS on some USB adapters; this does not program flash or eFuses.\nAn empty log simply means the diagnostic could not yet be observed.
 
 Evaluate the captured output without needing a device connection:
 
@@ -174,6 +172,8 @@ The read-only parser's own unit tests are:
 ```bash
 python3 -m unittest discover -s tools/config-v2-tests \
   -p 'test_receipt_device_serial.py' -v
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_receipt_serial_capture.py' -v
 ```
 
 **Passing this stage does not enable live Security2 session binding,
