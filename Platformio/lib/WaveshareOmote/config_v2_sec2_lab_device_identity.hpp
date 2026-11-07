@@ -46,6 +46,15 @@ public:
       std::uint32_t sessionId, const std::uint8_t *request,
       std::size_t requestLength, std::uint8_t *reply,
       std::size_t replyCapacity, std::size_t &replyLength) const;
+  // TEST LAB ONLY: sign a SHA-256 digest computed locally from a fully
+  // verified Security2 transaction. Never sign a caller-provided hash.
+  // The v2 transport's caller must check the HA signature first.
+#if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
+  bool copyLabPublicKey(std::uint8_t *out65, std::size_t capacity) const;
+  bool signVerifiedLabDigest(const std::uint8_t *digest32,
+                             std::uint8_t *signature, std::size_t capacity,
+                             std::size_t &signatureLength) const;
+#endif
   void clear();
   bool ready() const { return ready_; }
 
