@@ -112,6 +112,7 @@ class Journal {
 public:
     explicit Journal(Backend& store) : store_(store) {}
     Result load() {
+        loaded_ = false;
         ready_ = false;
         seq_ = 0;
         current_ = Record{};
@@ -119,8 +120,10 @@ public:
         ReadResult s0 = store_.read(0, raw0), s1 = store_.read(1, raw1);
         if (s0 == ReadResult::Error || s1 == ReadResult::Error)
             return Result::IoFailure;
-        if (s0 == ReadResult::Missing && s1 == ReadResult::Missing)
+        if (s0 == ReadResult::Missing && s1 == ReadResult::Missing) {
+            loaded_ = true;
             return Result::Empty;
+        }
         uint64_t n0 = 0, n1 = 0;
         Record r0, r1;
         if ((s0 == ReadResult::Present && !decode(raw0, n0, r0)) ||
@@ -138,9 +141,13 @@ public:
             seq_ = n1; current_ = r1;
         }
         ready_ = true;
+        loaded_ = true;
         return Result::Ready;
     }
     Result save(const Record& next) {
+        // Require an explicit successful load: never overwrite a journal
+        // before assessing its existing slots or after a corrupt read.
+        if (!loaded_) return Result::Invalid;
         // No security grant. Only public diagnostics may be saved.
         if (!valid(next)) return Result::Invalid;
         if (seq_ == std::numeric_limits<uint64_t>::max()) return Result::Invalid;
@@ -184,6 +191,7 @@ private:
     Backend& store_;
     uint64_t seq_ = 0;
     bool ready_ = false;
+    bool loaded_ = false;
     Record current_;
 };
 } // namespace omote_trust_lab
