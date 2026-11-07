@@ -22,7 +22,22 @@ else()
     set(app_sources "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 endif()
 
-idf_component_register(
-    SRCS ${app_sources}
-    REQUIRES mbedtls espressif__esp_websocket_client espressif__mdns joltwallet__littlefs
-)
+# The isolated diagnostic must not pull in OMOTE's managed network/storage
+# components. Preserve pre-existing component requirements for regular OMOTE
+# builds and add mbedTLS only to the opt-in compiled verifier.
+if(OMOTE_RECEIPT_DEVICE_LAB)
+    idf_component_register(
+        SRCS ${app_sources}
+        REQUIRES mbedtls
+    )
+elseif(OMOTE_RECEIPT_COMPILE_PROBE)
+    idf_component_register(
+        SRCS ${app_sources}
+        REQUIRES mbedtls espressif__esp_websocket_client espressif__mdns joltwallet__littlefs
+    )
+else()
+    idf_component_register(
+        SRCS ${app_sources}
+        REQUIRES espressif__esp_websocket_client espressif__mdns joltwallet__littlefs
+    )
+endif()
