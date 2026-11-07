@@ -15,7 +15,7 @@ class EnrollmentReceiptContractTests(unittest.TestCase):
     def test_canonical_fields_and_domain_separation(self):
         c = self.doc
         self.assertEqual(c["contract"], "omote-enrollment-receipt-v1-draft")
-        self.assertEqual(c["domain"], "OMOTE-ENROLLMENT-RECEIPT-V1\\n")
+        self.assertEqual(c["domain"], "OMOTE-ENROLLMENT-RECEIPT-V1" + chr(10))
         self.assertEqual(len(c["body_fields"]), len(set(c["body_fields"])))
         for name in ("tx_id", "epoch", "nonce", "signer", "phase",
                      "device_id", "ha_key_sha256", "device_key_sha256",
