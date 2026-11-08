@@ -250,12 +250,36 @@ esp_err_t Probe::txV2CommitRequest(
           millis()-self->startedAtMs_)>=kMaxWindowMs)
     return ESP_ERR_INVALID_STATE;
   std::vector<std::uint8_t> response;
+  config_v2_sec2_tx_v2_lab::VerifiedPublicKeys verified{};
   if (!self->txV2_.commit(session,input,static_cast<std::size_t>(inLen),
-                           millis(),self->deviceIdentity_,response))
+                           millis(),self->deviceIdentity_,response,verified) ||
+      !verified.valid)
     return ESP_ERR_INVALID_ARG;
+  // Only the successfully authenticated v2 transcript can present public
+  // identity evidence to the local touchscreen. Never store it as trust.
+  const auto haFp = fingerprintOfVerifiedPublic(verified.ha.data());
+  const auto deviceFp = fingerprintOfVerifiedPublic(verified.device.data());
+  if (haFp.empty() || deviceFp.empty()) return ESP_ERR_INVALID_STATE;
   auto *buffer=static_cast<std::uint8_t *>(std::malloc(response.size()));
   if (!buffer) return ESP_ERR_NO_MEM;
   std::memcpy(buffer,response.data(),response.size());
+  // Both observations are bound to the EXACT callback session and are
+  // protected from other endpoint callbacks by the existing review mutex.
+  config_v2_sec2_lab_mutual_review::Result haReview;
+  config_v2_sec2_lab_mutual_review::Result deviceReview;
+  {
+    std::lock_guard<std::mutex> lock(self->reviewMutex_);
+    const auto now=millis();
+    haReview=self->labReview_.observeVerifiedHa(session,haFp,now);
+    deviceReview=haReview==config_v2_sec2_lab_mutual_review::Result::Ok
+        ? self->labReview_.observeVerifiedDevice(session,deviceFp,now)
+        : config_v2_sec2_lab_mutual_review::Result::NotReady;
+  }
+  if (haReview!=config_v2_sec2_lab_mutual_review::Result::Ok ||
+      deviceReview!=config_v2_sec2_lab_mutual_review::Result::TouchRequired) {
+    std::free(buffer);
+    return ESP_ERR_INVALID_STATE;
+  }
   *output=buffer;
   *outLen=static_cast<ssize_t>(response.size());
   return ESP_OK;
