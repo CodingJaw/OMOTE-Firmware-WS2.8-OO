@@ -86,6 +86,25 @@ class Security2TxV2RuntimeGuardTests(unittest.TestCase):
         self.assertNotIn("trustGranted = true",COORD+callback)
         self.assertNotIn("deploymentEnabled = true",COORD+callback)
 
+    def test_review_status_is_read_only_and_binds_session_and_digest(self):
+        self.assertIn('kTxV2ReviewEndpoint[] = "omote-tx2-review"',HEADER)
+        self.assertIn("kTxV2ReviewEndpoint,txV2ReviewRequest,this",TRANSPORT)
+        self.assertIn("bool Coordinator::matchesCompleted(",COORD)
+        self.assertIn("session==completedSession_",COORD)
+        self.assertIn("std::memcmp(digest32,completedDigest_.data(),32)==0",COORD)
+        self.assertIn("completedDigest_=transcriptDigest;",COORD)
+        self.assertIn("completedDigest_.fill(0);",COORD)
+        callback=TRANSPORT.split("esp_err_t Probe::txV2ReviewRequest(",1)[1].split("#endif",1)[0]
+        self.assertIn("self->txV2_.matchesCompleted(session,input+1)",callback)
+        self.assertIn("snapshot.verifiedSession!=session",callback)
+        self.assertIn("State::Reviewed",callback)
+        self.assertIn("State::AwaitingTouch",callback)
+        self.assertNotIn("acknowledgeFromLocalTouch(",callback)
+        self.assertNotIn("observeVerifiedHa(",callback)
+        self.assertNotIn("observeVerifiedDevice(",callback)
+        self.assertNotIn("Preferences",callback)
+        self.assertNotIn("nvs_",callback)
+
     def test_never_authorizes_trust_or_permanent_storage(self):
         for filename,text in (("coordinator",COORD),("header",COORD_HEAD)):
             for forbidden in ("Preferences storage", "nvs_set_blob(",
