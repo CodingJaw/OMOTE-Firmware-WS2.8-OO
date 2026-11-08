@@ -20,7 +20,7 @@ from sec2_mutual_transaction_proof_v2 import (
 
 OPEN_LENGTH = 1 + 4 + 4 + 16 + 1 + 8 + 65 + 32
 MAX_COMMIT_LENGTH = 2 + 80 + 32
-TOUCH_RECEIPT_DOMAIN = b"OMOTE-SEC2-TX2-TOUCH-RECEIPT-LAB-V1\\n"
+TOUCH_RECEIPT_DOMAIN = b"OMOTE-SEC2-TX2-TOUCH-RECEIPT-LAB-V1\n"
 
 
 class LabTransactionError(ValueError):
