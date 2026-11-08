@@ -156,6 +156,58 @@ A successful terminal printout alone does not prove the touchscreen review
 has worked. Report whether the screen displays the expected fingerprint,
 whether Review OK is visible, and what appears after physically tapping it.
 
+## Optional encrypted local touchscreen review status (new, UNVERIFIED)
+
+A third opt-in v2 endpoint, `omote-tx2-review`, accepts a 33-byte encrypted
+payload: `0x02 || verified_transcript_SHA256[32]`. It responds with
+`0x02 || state || same_digest[32]` where `state=0` means waiting for
+the physical Review OK button and `state=1` means the touchscreen
+acknowledged local evidence. Rejected, expired, wrong-session and
+wrong-digest requests fail closed. The returned status is NOT paired,
+NOT authorized, and DOES NOT bind an HA administrator.
+
+The endpoint requires the authenticated callback Security2 session ID to
+equal the session that completed the mutual v2 proof, the supplied digest
+to equal the device's volatile verified transcript, and the touchscreen
+review to belong to exactly the same session. It only reads state: there
+is **no network approval action or persistent trust write**.
+
+The matching contract is
+`Platformio/tools/config-v2-tests/sec2_tx_v2_local_review_lab_wire_contract.json`;
+a byte-equivalent contract is mirrored as a HACS fixture and checked in CI.
+The default manual `--tx-v2-lab` mode remains unchanged.
+
+To test the new opt-in poll after building and uploading the
+`waveshare28v2_omote_sec2_tx_v2_lab` firmware:
+
+```bash
+export IDF_PATH="$HOME/Documents/026code/esp-idf"
+cd ~/Documents/026code/OMOTE-Firmware-WS2.8-OO/Platformio
+python3 -m unittest discover -s tools/config-v2-tests \\
+  -p 'test_sec2_tx_v2_lab_client.py' -v
+python3 -m unittest discover -s tools/config-v2-tests \\
+  -p 'test_sec2_tx_v2_runtime_guards.py' -v
+python3 -m unittest discover -s tools/config-v2-tests \\
+  -p 'test_sec2_lab_boundary.py' -v
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote_sec2_tx_v2_lab
+# If all tests and the build pass, upload as described above.
+# On physical remote: Settings > SEC2 encrypted LAB test > Start lab
+python3 tools/config-v2-tests/sec2_lab_client.py \\
+  --host 10.0.10.121 --tx-v2-lab --tx-v2-await-touch --ack-lab-only
+```
+
+Compare the full HA SHA-256 public fingerprint displayed in the terminal
+with the four rows on the Waveshare, then physically tap Review OK.
+The client polls the same completed SRP6a/AES-GCM session for up to 45 seconds.
+Expected only after a verified local press:
+`PASS: matching live v2 transcript acknowledged by local touchscreen.`
+If the touchscreen is rejected, expires, or the connection closes, the
+client fails without reporting acceptance. No code or status from this
+endpoint may be used as a production trust grant.
+
+This addition has been committed but NOT YET built or accepted on hardware.
+The previous live crypto PASS does not prove local touchscreen status polling.
+
 ## Still blocking production enrollment
 
 - The software LAB device key is NOT hardware-protected and the
