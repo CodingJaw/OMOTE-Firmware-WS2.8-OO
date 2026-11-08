@@ -16,6 +16,7 @@ import asyncio
 from getpass import getpass
 from hashlib import sha256
 import ipaddress
+from inspect import signature
 import json
 import os
 from pathlib import Path
@@ -45,7 +46,8 @@ _HINTS = {
     "protocol-version": "Check the device displays 'Encrypted LAB test port 18082' and that the lab listener has not expired. Do not use the public port-80 API.",
     "validate-version": "The response does not match this exact lab protocol. Confirm the lab build and client are from the same branch.",
     "local-pin": "Enter exactly the six-digit code shown on the remote screen. The code must never be pasted into logs.",
-    "srp-handshake": "Security2 negotiation failed. Stop here: failed SRP frames consume the persistent five-message lab quota, including across reboots.",
+    "srp-api": "The installed ESP-IDF Python Security2 API is incompatible with the requested patch. No SRP frame was sent and no Security2 message quota was consumed by this attempt.",
+    "srp-handshake": "Security2 negotiation failed. Stop here: sent SRP frames consume the persistent five-message lab quota, including across reboots.",
     "encrypted-probe": "SRP may have completed but AES-GCM probe verification failed. Do not claim pairing success.",
     "ha-key-proof": "The optional P-256 candidate-key proof failed. It is not production pairing.",
     "device-key-proof": "The experimental device software key proof failed. Do not pin or trust this key.",
@@ -109,6 +111,26 @@ def _official_provisioning_modules():
     return Security2, Transport_HTTP
 
 
+
+def _construct_security2(Security2, sec_patch_ver: int, pin: str):
+    """Adapt to the installed official Espressif API before sending any SRP frame.
+
+    ESP-IDF 5.3.2 accepts (username, password, verbose), not sec_patch_ver.
+    Some newer versions expose sec_patch_ver. Never silently downgrade an
+    explicitly announced patch-1 session to legacy nonce handling.
+    """
+    try:
+        params = signature(Security2).parameters
+    except (TypeError, ValueError):
+        raise LabProbeError("srp-api", "UnknownSecurity2Constructor") from None
+    args = {"username": "omote-ha", "password": pin, "verbose": False}
+    if "sec_patch_ver" in params:
+        args["sec_patch_ver"] = sec_patch_ver
+    elif sec_patch_ver != 0:
+        raise LabProbeError("srp-api", "UnsupportedNoncePatch")
+    return Security2(**args)
+
+
 async def probe(
     host: str, port: int, *, ha_proof: bool = False, device_proof: bool = False,
     tx_v2_lab: bool = False
@@ -138,12 +160,10 @@ async def probe(
         if not re.fullmatch(r"[0-9]{6}", pin):
             raise ValueError("Six decimal digits required")
 
-        stage = "srp-handshake"
-        sec = Security2(
-            sec_patch_ver=details["sec_patch_ver"], username="omote-ha",
-            password=pin, verbose=False,
-        )
+        stage = "srp-api"
+        sec = _construct_security2(Security2, details["sec_patch_ver"], pin)
         pin = None
+        stage = "srp-handshake"
         response = None
         while True:
             request = sec.security_session(response)
@@ -216,6 +236,8 @@ async def probe(
             print("NOT PAIRED: no HA trust, device trust, deployment or OTA.")
 
         print("No production device/HA identity, pairing trust, or configuration writes were tested.")
+    except LabProbeError:
+        raise
     except Exception as exc:
         raise LabProbeError(stage, type(exc).__name__) from None
     finally:
