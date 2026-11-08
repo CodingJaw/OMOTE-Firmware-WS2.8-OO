@@ -16,6 +16,8 @@ COORD_HEAD=(LIB/"config_v2_sec2_tx_v2_lab.hpp").read_text()
 DEVICE=(LIB/"config_v2_sec2_lab_device_identity.cpp").read_text()
 WIRE=json.loads((Path(__file__).with_name(
     "sec2_tx_v2_live_lab_wire_contract.json")).read_text())
+SIGNED_TOUCH_WIRE=json.loads((Path(__file__).with_name(
+    "sec2_tx_v2_signed_touch_receipt_lab_contract.json")).read_text())
 
 
 class Security2TxV2RuntimeGuardTests(unittest.TestCase):
@@ -128,6 +130,18 @@ class Security2TxV2RuntimeGuardTests(unittest.TestCase):
         self.assertIn("tx.touch_receipt_request()",client)
         self.assertIn("tx.check_touch_receipt_reply(plaintext)",client)
         self.assertIn('if args.tx_v2_attest_touch and not args.tx_v2_await_touch',client)
+        self.assertEqual(SIGNED_TOUCH_WIRE["transport"]["endpoint"],
+                         "omote-tx2-touch-receipt")
+        self.assertEqual(SIGNED_TOUCH_WIRE["request"]["bytes"],65)
+        self.assertEqual(SIGNED_TOUCH_WIRE["response"]["maximum_bytes"],83)
+        self.assertIn("OMOTE-SEC2-TX2-TOUCH-RECEIPT-LAB-V1",COORD_HEAD)
+        self.assertEqual(SIGNED_TOUCH_WIRE["signature"]["domain"],
+                         "OMOTE-SEC2-TX2-TOUCH-RECEIPT-LAB-V1\\n")
+        self.assertIn("touchReceiptIssued_=true;",COORD)
+        self.assertTrue(SIGNED_TOUCH_WIRE["authorization"]["laboratory_only"])
+        self.assertTrue(all(
+            not enabled for k,enabled in SIGNED_TOUCH_WIRE["authorization"].items()
+            if k!="laboratory_only"))
 
     def test_never_authorizes_trust_or_permanent_storage(self):
         for filename,text in (("coordinator",COORD),("header",COORD_HEAD)):
