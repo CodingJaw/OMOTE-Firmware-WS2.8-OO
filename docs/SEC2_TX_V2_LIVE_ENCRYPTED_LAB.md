@@ -208,6 +208,85 @@ endpoint may be used as a production trust grant.
 This addition has been committed but NOT YET built or accepted on hardware.
 The previous live crypto PASS does not prove local touchscreen status polling.
 
+## One-shot signed physical-touch receipt LAB (NEW — unverified)
+
+Following the successful real-device physical Review OK test on 2026-11-08,
+a separate optional encrypted endpoint `omote-tx2-touch-receipt` has been
+added to the same **opt-in** laboratory firmware target. It is not a
+production enrollment receipt and does not change the existing v2 proof or
+review-poll commands.
+
+After the HA client verifies both v2 P-256 signatures, their transcript
+hash, the matching HA fingerprint on the touchscreen and encrypted status
+`Reviewed`, the client sends one more encrypted request:
+
+- Request: `0x02 || verified_transcript_SHA256[32] || fresh_random_challenge[32]`
+- Reply: `0x02 || 0x01_local_reviewed || u8(DER_signature_length) || P256_DER_signature`
+- Signed content: ASCII `OMOTE-SEC2-TX2-TOUCH-RECEIPT-LAB-V1\\n`
+  then `u8(2) || u32_be(Security2_callback_session) || transcript_SHA256[32] || challenge[32] || u8(1)`.
+
+The remote rechecks the session ID and transcript against its volatile
+completed v2 transaction, requires the Review state to have been set by
+physical touch on this session, and signs with the LAB NVS-backed P-256
+software device key **at most once**. A different session, transcript,
+missing physical review, all-zero challenge, repeated request, expired
+window or rejected review fails closed.
+
+The Python client verifies the signature against the **device public key
+from its independently verified v2 transaction**, not an untrusted network
+identifier. The challenge is random and unique for this request.
+Any malformed, forged, stale or mismatched response is rejected. The
+signed receipt is never persisted as HA trust and never enables privileged
+operations.
+
+**New acceptance tests — before flashing:** from the PlatformIO directory,
+update the feature branch, then run:
+
+```bash
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_sec2_tx_v2_lab_client.py' -v
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_sec2_tx_v2_runtime_guards.py' -v
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_sec2_lab_boundary.py' -v
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote_sec2_tx_v2_lab
+```
+
+After all three test suites and the PlatformIO build pass, flash only the
+opt-in lab firmware. On the remote physically tap Start lab; then execute:
+
+```bash
+export IDF_PATH="$HOME/Documents/026code/esp-idf"
+python3 tools/config-v2-tests/sec2_lab_client.py \
+  --host 10.0.10.121 --tx-v2-lab --tx-v2-await-touch \
+  --tx-v2-attest-touch --ack-lab-only
+```
+
+After comparing the full HA public fingerprint, physically tap Review OK.
+The client should additionally print:
+
+```text
+PASS: device P-256 signature confirms same-session physical LAB review.
+LAB ONLY: signed touch receipt is one-shot and NOT pairing.
+```
+
+This new receipt has **not been built or exercised on Waveshare hardware**
+yet. The previous successful Review OK poll does NOT prove this signature.
+See `Platformio/tools/config-v2-tests/sec2_tx_v2_signed_touch_receipt_lab_contract.json`
+and the mirrored read-only HACS fixture.
+
+### Production-security blocker: legacy Security2 AES-GCM nonce
+
+The official ESP-IDF 5.3.2 Python Security2 implementation currently
+initializes AES-GCM with the device-provided nonce and reuses it for
+multiple `encrypt_data`/`decrypt_data` calls. Such nonce reuse can
+compromise AES-GCM confidentiality and integrity. This lab experiment
+MUST NOT be represented as a production-secure transport until a
+compatible, independently tested unique-nonce/counter scheme is
+implemented on **both** ESP32 and Home Assistant. The separate P-256
+signatures add transcript/proof integrity but do not make the legacy
+AES-GCM implementation acceptable for production key exchange.
+
 ## Still blocking production enrollment
 
 - The software LAB device key is NOT hardware-protected and the
