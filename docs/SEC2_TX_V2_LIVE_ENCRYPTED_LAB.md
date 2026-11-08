@@ -183,16 +183,16 @@ To test the new opt-in poll after building and uploading the
 ```bash
 export IDF_PATH="$HOME/Documents/026code/esp-idf"
 cd ~/Documents/026code/OMOTE-Firmware-WS2.8-OO/Platformio
-python3 -m unittest discover -s tools/config-v2-tests \\
+python3 -m unittest discover -s tools/config-v2-tests \
   -p 'test_sec2_tx_v2_lab_client.py' -v
-python3 -m unittest discover -s tools/config-v2-tests \\
+python3 -m unittest discover -s tools/config-v2-tests \
   -p 'test_sec2_tx_v2_runtime_guards.py' -v
-python3 -m unittest discover -s tools/config-v2-tests \\
+python3 -m unittest discover -s tools/config-v2-tests \
   -p 'test_sec2_lab_boundary.py' -v
 ~/.platformio/penv/bin/platformio run -e waveshare28v2_omote_sec2_tx_v2_lab
 # If all tests and the build pass, upload as described above.
 # On physical remote: Settings > SEC2 encrypted LAB test > Start lab
-python3 tools/config-v2-tests/sec2_lab_client.py \\
+python3 tools/config-v2-tests/sec2_lab_client.py \
   --host 10.0.10.121 --tx-v2-lab --tx-v2-await-touch --ack-lab-only
 ```
 
