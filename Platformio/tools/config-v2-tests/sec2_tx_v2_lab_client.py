@@ -9,6 +9,7 @@ from __future__ import annotations
 from hashlib import sha256
 from secrets import token_bytes
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
@@ -19,6 +20,7 @@ from sec2_mutual_transaction_proof_v2 import (
 
 OPEN_LENGTH = 1 + 4 + 4 + 16 + 1 + 8 + 65 + 32
 MAX_COMMIT_LENGTH = 2 + 80 + 32
+TOUCH_RECEIPT_DOMAIN = b"OMOTE-SEC2-TX2-TOUCH-RECEIPT-LAB-V1\\n"
 
 
 class LabTransactionError(ValueError):
@@ -39,6 +41,9 @@ class LabV2Transaction:
         self.context = None
         self._ha_sig = None
         self._verified_digest = None
+        self._review_confirmed = False
+        self._receipt_challenge = None
+        self._receipt_verified = False
 
     def review_request(self) -> bytes:
         """Read-only LAB status check for this verified Security2 transcript."""
@@ -54,7 +59,44 @@ class LabV2Transaction:
                 payload[0] != 2 or payload[1] not in (0, 1) or
                 payload[2:] != self._verified_digest):
             raise LabTransactionError("invalid-session-bound-review-reply")
-        return payload[1] == 1
+        if payload[1] == 1:
+            self._review_confirmed = True
+            return True
+        return False
+
+    def touch_receipt_request(self) -> bytes:
+        """One-shot fresh challenge after verified transaction and local Review OK."""
+        if self._verified_digest is None or not self._review_confirmed or \
+                self._receipt_challenge is not None or self._receipt_verified:
+            raise LabTransactionError("touch-receipt-not-ready-or-used")
+        self._receipt_challenge = token_bytes(32)
+        return bytes([2]) + self._verified_digest + self._receipt_challenge
+
+    def check_touch_receipt_reply(self, payload: bytes) -> bool:
+        """Verify lab P-256 device signature. NOT a production trust assertion."""
+        if self._verified_digest is None or not self._review_confirmed or \
+                self._receipt_challenge is None or self._receipt_verified:
+            raise LabTransactionError("touch-receipt-unexpected-or-replayed")
+        if (type(payload) is not bytes or len(payload) < 3+8 or
+                len(payload) > 3+80 or payload[0] != 2 or
+                payload[1] != 1 or payload[2] != len(payload)-3):
+            raise LabTransactionError("invalid-touch-receipt-frame")
+        message = (
+            TOUCH_RECEIPT_DOMAIN + bytes([2]) +
+            self.session_id.to_bytes(4, "big") +
+            self._verified_digest + self._receipt_challenge + bytes([1])
+        )
+        try:
+            public = ec.EllipticCurvePublicKey.from_encoded_point(
+                ec.SECP256R1(),
+                bytes.fromhex(self.context["device_public_sec1_hex"]),
+            )
+            public.verify(payload[3:], message, ec.ECDSA(hashes.SHA256()))
+        except (InvalidSignature, ValueError, TypeError):
+            raise LabTransactionError("invalid-touch-receipt-signature") from None
+        self._receipt_verified = True
+        self._receipt_challenge = None
+        return True
 
     def verified_public_fingerprints(self) -> dict[str, str]:
         """Public fingerprint comparison only AFTER verified device signature.
