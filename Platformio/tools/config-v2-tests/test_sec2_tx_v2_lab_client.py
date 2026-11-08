@@ -59,6 +59,25 @@ class TxV2LiveClientFramingTests(unittest.TestCase):
         self.assertFalse(result["deployment_enabled"])
         self.assertEqual(len(result["session_transcript_sha256"]),64)
 
+    def test_verified_public_fingerprints_match_signed_context(self):
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.verified_public_fingerprints()
+        verified_reply = self.commit_reply()
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.verified_public_fingerprints()
+        self.tx.check_commit(verified_reply)
+        fingerprints = self.tx.verified_public_fingerprints()
+        self.assertEqual(fingerprints["ha"], sha256(self.open_req[1:66]).hexdigest())
+        self.assertEqual(fingerprints["device"], sha256(self.device_pub).hexdigest())
+
+    def test_fingerprints_are_not_exposed_after_failed_signature(self):
+        corrupted=bytearray(self.commit_reply())
+        corrupted[2]^=1
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.check_commit(bytes(corrupted))
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.verified_public_fingerprints()
+
     def test_stale_session_cookie_rejected_before_ha_signs(self):
         reply=bytearray(self.reply)
         reply[4]^=1
