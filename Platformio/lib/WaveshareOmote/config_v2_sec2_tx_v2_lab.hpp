@@ -39,6 +39,10 @@ public:
               const config_v2_sec2_lab_device_identity::Identity &identity,
               std::vector<std::uint8_t> &reply,
               VerifiedPublicKeys &verified);
+  // Non-authorizing proof lookup, restricted to the SAME Security2 session
+  // and transcript digest as a completed mutual-signature transaction.
+  bool matchesCompleted(std::uint32_t session,
+                        const std::uint8_t *digest32);
   void close();
 
 private:
@@ -56,6 +60,7 @@ private:
   std::mutex mutex_;
   Pending pending_{};
   std::uint32_t completedSession_ = 0;
+  std::array<std::uint8_t,32> completedDigest_{};
 };
 } // namespace config_v2_sec2_tx_v2_lab
 #endif
