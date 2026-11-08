@@ -319,6 +319,47 @@ esp_err_t Probe::txV2ReviewRequest(
   *outLen=34;
   return ESP_OK;
 }
+// Additional LAB-only endpoint: issue one device-signed record of an
+// ALREADY completed physical Review OK. No network request can approve touch.
+// Request: 0x02 || transcript_sha256[32] || fresh_client_challenge[32].
+// Reply: 0x02 || 0x01_local_reviewed || u8_der_len || P256_DER_signature.
+// Signature domain binds version, Security2 session, transaction transcript,
+// client challenge and reviewed state. This is NOT enrollment permission.
+esp_err_t Probe::txV2TouchReceiptRequest(
+    std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+    std::uint8_t **output, ssize_t *outLen, void *ctx) {
+  auto *self=static_cast<Probe *>(ctx);
+  if (!self || !self->active() || !input || !output || !outLen ||
+      inLen!=static_cast<ssize_t>(
+          config_v2_sec2_tx_v2_lab::kTouchReceiptRequestBytes) ||
+      input[0]!=config_v2_sec2_tx_v2_lab::kProtocolVersion ||
+      static_cast<std::uint32_t>(millis()-self->startedAtMs_)>=kMaxWindowMs)
+    return ESP_ERR_INVALID_STATE;
+  // The one-shot signature is guarded by both mutexes and is impossible
+  // unless the authenticated session's local touchscreen review was
+  // explicitly accepted by a physical LVGL callback.
+  auto *buffer=static_cast<std::uint8_t *>(std::malloc(3+80));
+  if (!buffer) return ESP_ERR_NO_MEM;
+  std::vector<std::uint8_t> receipt;
+  bool allowed=false;
+  {
+    std::lock_guard<std::mutex> lock(self->reviewMutex_);
+    const auto snapshot=self->labReview_.snapshot(millis());
+    if (snapshot.verifiedSession==session &&
+        snapshot.state==config_v2_sec2_lab_mutual_review::State::Reviewed) {
+      allowed=self->txV2_.signLocalTouchReceipt(
+          session,input+1,input+33,self->deviceIdentity_,receipt);
+    }
+  }
+  if (!allowed || receipt.size()<3+8 || receipt.size()>3+80) {
+    std::free(buffer);
+    return ESP_ERR_INVALID_STATE;
+  }
+  std::memcpy(buffer,receipt.data(),receipt.size());
+  *output=buffer;
+  *outLen=static_cast<ssize_t>(receipt.size());
+  return ESP_OK;
+}
 #endif
 
 bool Probe::startFromTrustedLocalTouch(const char *pin,
@@ -401,6 +442,9 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   if (good)
     good = protocomm_add_endpoint(
         candidate,kTxV2ReviewEndpoint,txV2ReviewRequest,this) == ESP_OK;
+  if (good)
+    good = protocomm_add_endpoint(
+        candidate,kTxV2ReceiptEndpoint,txV2TouchReceiptRequest,this) == ESP_OK;
 #endif
 
   if (!good) {
