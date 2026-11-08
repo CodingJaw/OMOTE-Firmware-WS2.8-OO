@@ -1,6 +1,6 @@
 # Security2 transaction v2 — opt-in live encrypted LAB
 
-Date: 2026-11-07. **Development / unverified hardware build.**
+Updated: 2026-11-08. **Live encrypted v2 proof PASS on Waveshare hardware; new touchscreen linkage NOT YET tested.**
 Branch: `feature/config-v2-transactional` only.
 Normal OMOTE, previously accepted `waveshare28v2_omote_sec2_lab`,
 the standalone receipt test and the stable branch are not modified to
@@ -18,8 +18,20 @@ and the Waveshare ESP32-S3 already printed:
 [RECEIPT-LAB] FINAL PASS; paired=0 deployment=0 ota=0 efuse=0
 ```
 
-This confirms only signed fixed receipt vectors on-device. The present
-live v2 endpoint integration is **new and not yet built/tested on hardware**.
+The earlier receipt vectors were offline-only. On 2026-11-08 the user also
+reported a successful **live Security2 SRP6a/AES-GCM, mutual P-256 signing,
+and matching v2 transaction SHA-256** on the actual Waveshare:
+
+```text
+PASS: Security2 SRP6a session and AES-GCM encrypted probe.
+PASS: both P-256 signatures bind the same live Security2 lab transaction.
+PASS: device and HA derived identical verified transcript SHA-256.
+LAB ONLY SHA-256 transcript: 1be0fd4566fc8f4863e75ddc0fb083e59570c0bd9ac435f06676e9f249778541
+NOT PAIRED: no HA trust, device trust, deployment or OTA.
+```
+
+The subsequent change connecting verified v2 proof evidence to a physical
+touchscreen review is separate and **not yet hardware-verified**.
 
 ## Isolated build target and touch-gate
 
@@ -73,6 +85,26 @@ documented, the existing Security2 LAB can create that software key
 in ordinary NVS on the FIRST physically initiated lab session.
 The new v2 coordinator itself writes no device trust record.
 
+### Follow-up: verified v2 proof to touchscreen review (NEW, untested)
+
+The v2 commit now returns the authenticated **public** HA and device keys
+only after checking HA's P-256 signature, producing the device signature,
+and deriving the matching transcript hash. The encrypted callback calculates
+SHA-256 public fingerprints and forwards them, under a mutex, into the
+existing volatile same-session `labReview_`. That state machine requires
+both independently verified public keys to bind to exactly one protocomm
+session ID. On success, the real LVGL touchscreen displays the HA SHA-256
+public fingerprint and allows a **local-only** Review OK or Reject gesture.
+The network callback cannot acknowledge review; it can only supply signed
+proof evidence. No persistence or configuration privileges result.
+
+The manual Python client now prints the verified HA and device public
+fingerprints after successful v2 proof verification. Compare the complete
+HA fingerprint on the terminal to the four rows on the touchscreen, then
+press Review OK if they match, otherwise Reject. The touchscreen response
+is not yet returned to HA and does not authorize durable enrollment.
+
+
 ## Test order — DO NOT FLASH BEFORE BUILD PASSES
 
 From `OMOTE-Firmware-WS2.8-OO/Platformio`:
@@ -88,8 +120,9 @@ python3 -m unittest discover -s tools/config-v2-tests \
 ~/.platformio/penv/bin/platformio run -e waveshare28v2_omote_sec2_tx_v2_lab
 ```
 
-These are build/host tests only and do not touch flash. The newly
-extended code is **not yet independently validated by a PlatformIO build**.
+These are build/host tests only and do not touch flash. The new
+v2-to-touchscreen linkage must pass a fresh PlatformIO build before upload.
+The prior live v2 hardware PASS does **not** validate this new linkage.
 Report first compilation error and do not upload if any tests/build fail.
 
 After explicitly deciding to replace the standalone receipt diagnostic
@@ -113,19 +146,25 @@ source checkout for the official Security2 client. The SRP frame budget
 is persisted, so repeated errors may require the existing on-device,
 physically confirmed lab rearm process.
 
-Expected manual outcome *only after real test verification*:
-`PASS: both P-256 signatures bind the same live Security2 lab transaction`
-and `PASS: device and HA derived identical verified transcript SHA-256`,
-with `NOT PAIRED` explicitly printed. A build is not proof of a live
-session. No test has yet reported this real v2 result.
+The user already confirmed this live v2 cryptographic result on
+2026-11-08. The next physical test must additionally confirm that the
+HA fingerprint printed by the Python client appears as four lines on the
+Waveshare after the v2 COMMIT, and that only an actual local touch on
+**Review OK** or **Reject** dismisses that review state.
+
+A successful terminal printout alone does not prove the touchscreen review
+has worked. Report whether the screen displays the expected fingerprint,
+whether Review OK is visible, and what appears after physically tapping it.
 
 ## Still blocking production enrollment
 
 - The software LAB device key is NOT hardware-protected and the
   current HA proof is ephemeral, not the persistent HA candidate identity.
-- This proof does not bind an authorized HA admin or touchscreen Review OK
-  to this exact signed transaction. The existing v1 LAB touch review is
-  independent and must NOT be treated as approval for v2 enrollment.
+- The new v2 proof-to-touchscreen LAB link still requires board build and
+  hardware validation. Even if confirmed, that local acknowledgement is
+  **not** an authorized HA administrator approval or production enrollment.
+- HACS does not yet receive an authenticated, anti-replay review approval;
+  it still needs durable per-device HA identity, revocation and re-pairing.
 - There is no persistent trust/revocation journal, authenticated reconnect,
   configuration deployment, OTA or eFuse change.
 - Power-loss replay protection and two-party durable reconciliation remain
