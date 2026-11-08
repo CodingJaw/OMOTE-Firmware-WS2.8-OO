@@ -20,6 +20,14 @@ constexpr std::uint32_t kTransactionTimeoutMs = 30000;
 constexpr std::uint32_t kLabEpoch = 1;
 constexpr std::uint8_t kProtocolVersion = 2;
 
+// Populated only after both signatures and the bound transcript are verified.
+// These are PUBLIC keys, never identity credentials or pairing authorization.
+struct VerifiedPublicKeys {
+  bool valid = false;
+  std::array<std::uint8_t,65> ha{};
+  std::array<std::uint8_t,65> device{};
+};
+
 class Coordinator {
 public:
   bool open(std::uint32_t session, const std::uint8_t *request,
@@ -29,7 +37,8 @@ public:
   bool commit(std::uint32_t session, const std::uint8_t *request,
               std::size_t requestLength, std::uint32_t nowMs,
               const config_v2_sec2_lab_device_identity::Identity &identity,
-              std::vector<std::uint8_t> &reply);
+              std::vector<std::uint8_t> &reply,
+              VerifiedPublicKeys &verified);
   void close();
 
 private:
