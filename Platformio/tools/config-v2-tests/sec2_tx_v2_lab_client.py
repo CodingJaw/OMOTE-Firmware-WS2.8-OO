@@ -39,6 +39,21 @@ class LabV2Transaction:
         self.context = None
         self._ha_sig = None
 
+    def verified_public_fingerprints(self) -> dict[str, str]:
+        """Public fingerprint comparison only AFTER verified device signature.
+
+        The ephemeral HA private key is discarded by check_commit(); neither
+        fingerprint represents persistent trust, pairing, or approval.
+        """
+        if self._ha_key is not None or self._ha_sig is not None or self.context is None:
+            raise LabTransactionError("fingerprints-require-verified-commit")
+        return {
+            "ha": sha256(self._ha_pub).hexdigest(),
+            "device": sha256(
+                bytes.fromhex(self.context["device_public_sec1_hex"])
+            ).hexdigest(),
+        }
+
     def open_request(self) -> bytes:
         if self.context is not None:
             raise LabTransactionError("open-repeated")
