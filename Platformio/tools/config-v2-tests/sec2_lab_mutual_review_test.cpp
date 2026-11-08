@@ -28,6 +28,7 @@ int main() {
   auto pending = state.snapshot(205);
   assert(pending.state == review::State::AwaitingTouch);
   assert(pending.haFingerprint == ha && pending.deviceFingerprint == device);
+  assert(pending.verifiedSession == session);
   assert(!pending.trustGranted && !pending.deploymentEnabled);
   assert(state.acknowledgeFromLocalTouch(206) ==
          review::Result::LocalReviewOnly);
@@ -52,6 +53,7 @@ int main() {
          review::Result::SessionMismatch);
   assert(state.acknowledgeFromLocalTouch(2003) == review::Result::NotReady);
   assert(state.snapshot(2004).haFingerprint.empty());
+  assert(state.snapshot(2004).verifiedSession == 0);
 
   // A duplicate proof, even with the identical fingerprint, must fail closed
   // instead of upgrading or reusing evidence as a second session.
