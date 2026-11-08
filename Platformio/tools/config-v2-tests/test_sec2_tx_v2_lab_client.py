@@ -78,6 +78,34 @@ class TxV2LiveClientFramingTests(unittest.TestCase):
         with self.assertRaises(mod.LabTransactionError):
             self.tx.verified_public_fingerprints()
 
+    def test_review_poll_only_after_live_mutual_proof(self):
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.review_request()
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.check_review_reply(bytes([2, 1]) + bytes(32))
+        reply = self.commit_reply()
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.review_request()
+        proof = self.tx.check_commit(reply)
+        digest = bytes.fromhex(proof["session_transcript_sha256"])
+        self.assertEqual(self.tx.review_request(), bytes([2]) + digest)
+        self.assertFalse(self.tx.check_review_reply(bytes([2, 0]) + digest))
+        self.assertTrue(self.tx.check_review_reply(bytes([2, 1]) + digest))
+
+    def test_review_wrong_digest_version_or_status_rejected(self):
+        proof = self.tx.check_commit(self.commit_reply())
+        digest = bytes.fromhex(proof["session_transcript_sha256"])
+        for invalid in (
+            b"", None, bytes([1, 1]) + digest,
+            bytes([2, 2]) + digest,
+            bytes([2, 1]) + bytes(32),
+            bytes([2, 1]) + digest[:-1],
+            bytes([2, 1]) + digest + b"x",
+        ):
+            with self.subTest(invalid=repr(invalid)[:40]):
+                with self.assertRaises(mod.LabTransactionError):
+                    self.tx.check_review_reply(invalid)
+
     def test_stale_session_cookie_rejected_before_ha_signs(self):
         reply=bytearray(self.reply)
         reply[4]^=1
