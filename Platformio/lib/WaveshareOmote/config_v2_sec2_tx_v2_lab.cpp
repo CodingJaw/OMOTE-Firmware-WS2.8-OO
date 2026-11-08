@@ -134,8 +134,9 @@ bool Coordinator::commit(
     std::uint32_t session,const std::uint8_t *request,
     std::size_t requestLength,std::uint32_t nowMs,
     const config_v2_sec2_lab_device_identity::Identity &identity,
-    std::vector<std::uint8_t> &reply) {
+    std::vector<std::uint8_t> &reply, VerifiedPublicKeys &verified) {
   reply.clear();
+  verified = VerifiedPublicKeys{}; // Invalid on every failure path.
   if (!session || !request || requestLength<1+1+8 ||
       requestLength>kMaxCommitRequestBytes || request[0]!=kProtocolVersion ||
       requestLength!=static_cast<std::size_t>(2+request[1]) ||
@@ -191,6 +192,11 @@ bool Coordinator::commit(
   reply.push_back(static_cast<std::uint8_t>(sigLength));
   append(reply,signature.data(),sigLength);
   append(reply,transcriptDigest);
+  // Publish public evidence only after HA verification, device signing and
+  // the shared transcript hash all succeeded. No private key is copied.
+  verified.ha=p.haPub;
+  verified.device=p.devicePub;
+  verified.valid=true;
   // Mark as consumed after successfully computing one non-authorizing proof.
   completedSession_=session;
   return true;
