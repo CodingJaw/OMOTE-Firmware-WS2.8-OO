@@ -51,6 +51,7 @@ class Security2TxV2RuntimeGuardTests(unittest.TestCase):
         self.assertIn("pending_.session!=session",COORD)
         self.assertIn("kTransactionTimeoutMs = 30000",COORD_HEAD)
         self.assertIn("session==completedSession_",COORD)
+        self.assertIn("if (pending_.active || completedSession_!=0) return false;",COORD)
         self.assertIn("verifyHa(p.haPub.data(),context,request+2,request[1])",COORD)
         self.assertIn("identity.signVerifiedLabDigest(",COORD)
         self.assertLess(COORD.index("!verifyHa(p.haPub.data()"),
