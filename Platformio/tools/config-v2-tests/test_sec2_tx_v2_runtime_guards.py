@@ -105,6 +105,30 @@ class Security2TxV2RuntimeGuardTests(unittest.TestCase):
         self.assertNotIn("Preferences",callback)
         self.assertNotIn("nvs_",callback)
 
+    def test_signed_touch_receipt_requires_physical_review_and_one_shot(self):
+        self.assertIn('kTxV2ReceiptEndpoint[] = "omote-tx2-touch-receipt"',HEADER)
+        self.assertIn("kTxV2ReceiptEndpoint,txV2TouchReceiptRequest,this",TRANSPORT)
+        self.assertIn("bool Coordinator::signLocalTouchReceipt(",COORD)
+        self.assertIn("touchReceiptIssued_ || completedSession_!=session",COORD)
+        self.assertIn("std::memcmp(digest32,completedDigest_.data(),32)!=0",COORD)
+        self.assertIn("touchReceiptIssued_=true;",COORD)
+        self.assertIn("touchReceiptIssued_=false;",COORD)
+        self.assertIn("kTouchReceiptDomain",COORD)
+        callback=TRANSPORT.split("esp_err_t Probe::txV2TouchReceiptRequest(",1)[1].split("#endif",1)[0]
+        self.assertIn("snapshot.verifiedSession==session",callback)
+        self.assertIn("snapshot.state==config_v2_sec2_lab_mutual_review::State::Reviewed",callback)
+        self.assertIn("self->txV2_.signLocalTouchReceipt(",callback)
+        self.assertLess(callback.index("State::Reviewed"),callback.index("signLocalTouchReceipt("))
+        self.assertNotIn("acknowledgeFromLocalTouch(",callback)
+        self.assertNotIn("nvs_set_blob(",callback)
+        self.assertNotIn("Preferences",callback)
+        self.assertNotIn("replaceAfterAuthenticatedPhysicalApproval",callback)
+        client=(Path(__file__).with_name("sec2_lab_client.py")).read_text()
+        self.assertIn("--tx-v2-attest-touch",client)
+        self.assertIn("tx.touch_receipt_request()",client)
+        self.assertIn("tx.check_touch_receipt_reply(plaintext)",client)
+        self.assertIn('if args.tx_v2_attest_touch and not args.tx_v2_await_touch',client)
+
     def test_never_authorizes_trust_or_permanent_storage(self):
         for filename,text in (("coordinator",COORD),("header",COORD_HEAD)):
             for forbidden in ("Preferences storage", "nvs_set_blob(",
