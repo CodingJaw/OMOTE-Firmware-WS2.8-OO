@@ -81,7 +81,7 @@ class Security2TxV2RuntimeGuardTests(unittest.TestCase):
         self.assertIn("std::free(buffer)",TRANSPORT)
         # The existing separate LVGL touchscreen handler alone may acknowledge
         # review. This encrypted network callback must never do so.
-        callback=TRANSPORT.split("esp_err_t Probe::txV2CommitRequest(",1)[1].split("\\n#endif",1)[0]
+        callback=TRANSPORT.split("esp_err_t Probe::txV2CommitRequest(",1)[1].split("#endif",1)[0]
         self.assertNotIn("acknowledgeFromLocalTouch(",COORD+callback)
         self.assertNotIn("trustGranted = true",COORD+callback)
         self.assertNotIn("deploymentEnabled = true",COORD+callback)
