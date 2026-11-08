@@ -96,7 +96,10 @@ bool Coordinator::open(
   if (pending_.active &&
       static_cast<std::uint32_t>(nowMs-pending_.created)>=kTransactionTimeoutMs)
     pending_=Pending{};
-  if (pending_.active || session==completedSession_) return false;
+  // Exactly one completed transaction per physically opened laboratory
+  // window. Other SRP sessions cannot replace evidence before a local
+  // touchscreen decision or signed one-shot touch receipt is obtained.
+  if (pending_.active || completedSession_!=0) return false;
 
   Pending candidate{};
   candidate.session=session;
