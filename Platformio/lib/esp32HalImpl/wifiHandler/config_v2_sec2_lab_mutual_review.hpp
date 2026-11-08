@@ -35,6 +35,9 @@ inline bool validFingerprint(std::string_view fingerprint) {
 
 struct Snapshot {
   State state = State::Closed;
+  // Only populated for a fully matched HA+device proof awaiting/reviewed
+  // on a single authenticated Security2 session; never grants authority.
+  std::uint32_t verifiedSession = 0;
   std::string haFingerprint;
   std::string deviceFingerprint;
   bool trustGranted = false;
@@ -65,6 +68,7 @@ public:
     Snapshot result;
     result.state = state_;
     if (state_ == State::AwaitingTouch || state_ == State::Reviewed) {
+      result.verifiedSession = session_;
       result.haFingerprint = haFingerprint_;
       result.deviceFingerprint = deviceFingerprint_;
     }
