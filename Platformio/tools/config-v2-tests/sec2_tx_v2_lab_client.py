@@ -44,7 +44,7 @@ class LabV2Transaction:
         """Read-only LAB status check for this verified Security2 transcript."""
         if self._verified_digest is None:
             raise LabTransactionError("review-requires-verified-commit")
-        return b"\\x02" + self._verified_digest
+        return bytes([2]) + self._verified_digest
 
     def check_review_reply(self, payload: bytes) -> bool:
         """Return True only after physical Review OK, never an enrollment grant."""
