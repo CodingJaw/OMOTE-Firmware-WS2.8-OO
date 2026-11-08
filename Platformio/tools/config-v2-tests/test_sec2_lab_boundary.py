@@ -44,14 +44,15 @@ class Security2LabBoundaryTests(unittest.TestCase):
             if p.suffix in (".cpp", ".hpp", ".h"):
                 self.assertNotIn("startFromTrustedLocalTouch", p.read_text(), p.name)
 
-    def test_lab_has_three_base_endpoints_plus_three_flagged_v2_endpoints(self):
+    def test_lab_has_three_base_endpoints_plus_four_flagged_v2_endpoints(self):
         self.assertIn('kSessionEndpoint[] = "prov-session"', HEADER)
         self.assertIn('kProbeEndpoint[] = "omote-probe"', HEADER)
-        self.assertEqual(SRC.count("protocomm_add_endpoint("), 6)
+        self.assertEqual(SRC.count("protocomm_add_endpoint("), 7)
         self.assertIn("#if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)", SRC)
         self.assertIn("kTxV2OpenEndpoint,txV2OpenRequest,this", SRC)
         self.assertIn("kTxV2CommitEndpoint,txV2CommitRequest,this", SRC)
         self.assertIn("kTxV2ReviewEndpoint,txV2ReviewRequest,this", SRC)
+        self.assertIn("kTxV2ReceiptEndpoint,txV2TouchReceiptRequest,this", SRC)
         self.assertIn("config_v2_sec2_tx_v2_lab::Coordinator txV2_", HEADER)
         self.assertIn('kCandidateProofEndpoint[] = "omote-ha-proof"', HEADER)
         self.assertIn('kDeviceProofEndpoint[] = "omote-device-proof"', HEADER)
