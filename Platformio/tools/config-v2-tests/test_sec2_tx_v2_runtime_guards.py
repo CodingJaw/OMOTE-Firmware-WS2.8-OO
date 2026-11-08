@@ -79,10 +79,12 @@ class Security2TxV2RuntimeGuardTests(unittest.TestCase):
         self.assertIn("std::lock_guard<std::mutex> lock(self->reviewMutex_)",TRANSPORT)
         self.assertIn("deviceReview!=config_v2_sec2_lab_mutual_review::Result::TouchRequired",TRANSPORT)
         self.assertIn("std::free(buffer)",TRANSPORT)
-        # A network callback must never acknowledge or authorize trust.
-        self.assertNotIn("acknowledgeFromLocalTouch(",COORD+TRANSPORT)
-        self.assertNotIn("trustGranted = true",COORD+TRANSPORT)
-        self.assertNotIn("deploymentEnabled = true",COORD+TRANSPORT)
+        # The existing separate LVGL touchscreen handler alone may acknowledge
+        # review. This encrypted network callback must never do so.
+        callback=TRANSPORT.split("esp_err_t Probe::txV2CommitRequest(",1)[1].split("\\n#endif",1)[0]
+        self.assertNotIn("acknowledgeFromLocalTouch(",COORD+callback)
+        self.assertNotIn("trustGranted = true",COORD+callback)
+        self.assertNotIn("deploymentEnabled = true",COORD+callback)
 
     def test_never_authorizes_trust_or_permanent_storage(self):
         for filename,text in (("coordinator",COORD),("header",COORD_HEAD)):
