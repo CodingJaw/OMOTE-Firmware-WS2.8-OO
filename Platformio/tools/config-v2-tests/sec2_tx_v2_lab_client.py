@@ -38,6 +38,23 @@ class LabV2Transaction:
         self._nonce = token_bytes(32)
         self.context = None
         self._ha_sig = None
+        self._verified_digest = None
+
+    def review_request(self) -> bytes:
+        """Read-only LAB status check for this verified Security2 transcript."""
+        if self._verified_digest is None:
+            raise LabTransactionError("review-requires-verified-commit")
+        return b"\\x02" + self._verified_digest
+
+    def check_review_reply(self, payload: bytes) -> bool:
+        """Return True only after physical Review OK, never an enrollment grant."""
+        if self._verified_digest is None:
+            raise LabTransactionError("review-requires-verified-commit")
+        if (type(payload) is not bytes or len(payload) != 34 or
+                payload[0] != 2 or payload[1] not in (0, 1) or
+                payload[2:] != self._verified_digest):
+            raise LabTransactionError("invalid-session-bound-review-reply")
+        return payload[1] == 1
 
     def verified_public_fingerprints(self) -> dict[str, str]:
         """Public fingerprint comparison only AFTER verified device signature.
@@ -122,6 +139,7 @@ class LabV2Transaction:
         if bytes.fromhex(bound["session_transcript_sha256"]) != response[-32:]:
             raise LabTransactionError("device-session-transcript-digest-mismatch")
         # Single-use verification, never a trust state. Drop local signing key.
+        self._verified_digest = response[-32:]
         self._ha_key = None
         self._ha_sig = None
         return bound
