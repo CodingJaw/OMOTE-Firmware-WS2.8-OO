@@ -106,6 +106,81 @@ class TxV2LiveClientFramingTests(unittest.TestCase):
                 with self.assertRaises(mod.LabTransactionError):
                     self.tx.check_review_reply(invalid)
 
+    def _ready_touch_receipt(self):
+        self.tx.check_commit(self.commit_reply())
+        digest = self.tx.review_request()[1:]
+        self.assertFalse(self.tx.check_review_reply(bytes([2, 0]) + digest))
+        self.assertTrue(self.tx.check_review_reply(bytes([2, 1]) + digest))
+        return self.tx.touch_receipt_request()
+
+    def _sign_touch_receipt(self, request, *, key=None, domain=None,
+                            session=123456, status=1):
+        key = key or self.device
+        domain = mod.TOUCH_RECEIPT_DOMAIN if domain is None else domain
+        message = (domain + bytes([2]) + session.to_bytes(4, "big") +
+                   request[1:33] + request[33:65] + bytes([status]))
+        signature = key.sign(message, ec.ECDSA(hashes.SHA256()))
+        return bytes([2, 1, len(signature)]) + signature
+
+    def test_touch_receipt_requires_verified_proof_and_real_review(self):
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.touch_receipt_request()
+        self.tx.check_commit(self.commit_reply())
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.touch_receipt_request()
+        digest = self.tx.review_request()[1:]
+        self.assertFalse(self.tx.check_review_reply(bytes([2, 0]) + digest))
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.touch_receipt_request()
+
+    def test_device_signed_touch_receipt_validates_then_refuses_replay(self):
+        req = self._ready_touch_receipt()
+        self.assertEqual(len(req), 65)
+        self.assertEqual(req[0], 2)
+        self.assertEqual(req[1:33], self.tx.review_request()[1:])
+        reply = self._sign_touch_receipt(req)
+        self.assertTrue(self.tx.check_touch_receipt_reply(reply))
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.check_touch_receipt_reply(reply)
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.touch_receipt_request()
+
+    def test_wrong_device_signing_key_rejected(self):
+        req = self._ready_touch_receipt()
+        impostor = ec.generate_private_key(ec.SECP256R1())
+        with self.assertRaises(mod.LabTransactionError):
+            self.tx.check_touch_receipt_reply(self._sign_touch_receipt(req, key=impostor))
+
+    def test_receipt_wrong_session_domain_digest_or_touch_state_rejected(self):
+        req = self._ready_touch_receipt()
+        variants = (
+            self._sign_touch_receipt(req, domain=b"FAKE-TOUCH-RECEIPT-V1\\n"),
+            self._sign_touch_receipt(req, session=123457),
+            self._sign_touch_receipt(bytes([2])+bytes(32)+req[33:65]),
+            self._sign_touch_receipt(req, status=0),
+            self._sign_touch_receipt(bytes([2])+req[1:33]+bytes(32)),
+        )
+        for reply in variants:
+            with self.subTest(reply_len=len(reply)):
+                with self.assertRaises(mod.LabTransactionError):
+                    self.tx.check_touch_receipt_reply(reply)
+
+    def test_tampered_and_malformed_touch_receipt_rejected(self):
+        req = self._ready_touch_receipt()
+        valid = self._sign_touch_receipt(req)
+        tampered = bytearray(valid)
+        tampered[-1] ^= 1
+        malformed = (
+            None, b"", bytes([1]) + valid[1:], bytes([2, 0]) + valid[2:],
+            bytes([2, 2]) + valid[2:],
+            bytes([2, 1, valid[2]+1]) + valid[3:],
+            valid[:-1], valid+b"x", bytes(tampered),
+        )
+        for reply in malformed:
+            with self.subTest(reply=repr(reply)[:32]):
+                with self.assertRaises(mod.LabTransactionError):
+                    self.tx.check_touch_receipt_reply(reply)
+
     def test_stale_session_cookie_rejected_before_ha_signs(self):
         reply=bytearray(self.reply)
         reply[4]^=1
