@@ -39,6 +39,7 @@ constexpr char kDeviceProofEndpoint[] = "omote-device-proof";
 constexpr char kTxV2OpenEndpoint[] = "omote-tx2-open";
 constexpr char kTxV2CommitEndpoint[] = "omote-tx2-commit";
 constexpr char kTxV2ReviewEndpoint[] = "omote-tx2-review";
+constexpr char kTxV2ReceiptEndpoint[] = "omote-tx2-touch-receipt";
 #endif
 
 class Probe {
@@ -85,6 +86,9 @@ private:
       std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
       std::uint8_t **output, ssize_t *outLen, void *ctx);
   static esp_err_t txV2ReviewRequest(
+      std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+      std::uint8_t **output, ssize_t *outLen, void *ctx);
+  static esp_err_t txV2TouchReceiptRequest(
       std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
       std::uint8_t **output, ssize_t *outLen, void *ctx);
 #endif
