@@ -200,6 +200,7 @@ bool Coordinator::commit(
   // Mark as consumed after successfully computing one non-authorizing proof.
   completedSession_=session;
   completedDigest_=transcriptDigest;
+  touchReceiptIssued_=false;
   return true;
 }
 
@@ -213,11 +214,60 @@ bool Coordinator::matchesCompleted(std::uint32_t session,
          std::memcmp(digest32,completedDigest_.data(),32)==0;
 }
 
+bool Coordinator::signLocalTouchReceipt(
+    std::uint32_t session, const std::uint8_t *digest32,
+    const std::uint8_t *clientChallenge32,
+    const config_v2_sec2_lab_device_identity::Identity &identity,
+    std::vector<std::uint8_t> &reply) {
+  reply.clear();
+  if (!session || !digest32 || !clientChallenge32 || !identity.ready())
+    return false;
+  // The client supplies 32 fresh random bytes. Reject an all-zero challenge
+  // so the receipt cannot accidentally become a stable replayable token.
+  std::uint8_t entropyOr=0;
+  for (std::size_t i=0;i<32;++i) entropyOr|=clientChallenge32[i];
+  if (!entropyOr) return false;
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (touchReceiptIssued_ || completedSession_!=session ||
+      std::memcmp(digest32,completedDigest_.data(),32)!=0)
+    return false;
+
+  // This signature attests only to an independently observed physical
+  // LAB Review OK, never to enrollment. The endpoint callback MUST verify
+  // that exact session's local state BEFORE calling this signer.
+  std::vector<std::uint8_t> message;
+  message.reserve(sizeof(kTouchReceiptDomain)-1+1+4+32+32+1);
+  prefix(message,kTouchReceiptDomain,sizeof(kTouchReceiptDomain)-1);
+  message.push_back(kProtocolVersion);
+  u32(message,session);
+  append(message,digest32,32);
+  append(message,clientChallenge32,32);
+  message.push_back(1);  // physically reviewed, never a trusted grant.
+  std::array<std::uint8_t,32> signedHash{};
+  if (!hash(message,signedHash)) return false;
+  std::array<std::uint8_t,80> signature{};
+  std::size_t signatureLen=0;
+  if (!identity.signVerifiedLabDigest(signedHash.data(),
+                                     signature.data(),signature.size(),
+                                     signatureLen) ||
+      signatureLen<8 || signatureLen>80)
+    return false;
+
+  reply.reserve(3+signatureLen);
+  reply.push_back(kProtocolVersion);
+  reply.push_back(1); // reviewed, LAB ONLY
+  reply.push_back(static_cast<std::uint8_t>(signatureLen));
+  append(reply,signature.data(),signatureLen);
+  touchReceiptIssued_=true; // one signature maximum per completed session.
+  return true;
+}
+
 void Coordinator::close() {
   std::lock_guard<std::mutex> lock(mutex_);
   pending_=Pending{};
   completedSession_=0;
   completedDigest_.fill(0);
+  touchReceiptIssued_=false;
 }
 } // namespace config_v2_sec2_tx_v2_lab
 #endif
