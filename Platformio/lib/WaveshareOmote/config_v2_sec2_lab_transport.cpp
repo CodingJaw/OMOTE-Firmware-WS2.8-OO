@@ -284,6 +284,41 @@ esp_err_t Probe::txV2CommitRequest(
   *outLen=static_cast<ssize_t>(response.size());
   return ESP_OK;
 }
+// Status poll has NO state-change operations: input is the digest of the
+// fully verified live transaction, validated against the same decrypted
+// protocomm session. Only physical touch can change review state.
+// Request: 0x02 || transcript_digest[32].
+// Response: 0x02 || (0x00 pending / 0x01 local-reviewed) || digest[32].
+// A rejected, expired, closed or different-session review FAILS CLOSED.
+esp_err_t Probe::txV2ReviewRequest(
+    std::uint32_t session, const std::uint8_t *input, ssize_t inLen,
+    std::uint8_t **output, ssize_t *outLen, void *ctx) {
+  auto *self=static_cast<Probe *>(ctx);
+  if (!self || !self->active() || !input || !output || !outLen ||
+      inLen!=33 || input[0]!=config_v2_sec2_tx_v2_lab::kProtocolVersion ||
+      static_cast<std::uint32_t>(millis()-self->startedAtMs_)>=kMaxWindowMs)
+    return ESP_ERR_INVALID_STATE;
+  if (!self->txV2_.matchesCompleted(session,input+1))
+    return ESP_ERR_INVALID_ARG;
+  config_v2_sec2_lab_mutual_review::Snapshot snapshot;
+  {
+    std::lock_guard<std::mutex> lock(self->reviewMutex_);
+    snapshot=self->labReview_.snapshot(millis());
+  }
+  if (snapshot.verifiedSession!=session ||
+      (snapshot.state!=config_v2_sec2_lab_mutual_review::State::AwaitingTouch &&
+       snapshot.state!=config_v2_sec2_lab_mutual_review::State::Reviewed))
+    return ESP_ERR_INVALID_STATE;
+  std::uint8_t *buffer=static_cast<std::uint8_t *>(std::malloc(34));
+  if (!buffer) return ESP_ERR_NO_MEM;
+  buffer[0]=config_v2_sec2_tx_v2_lab::kProtocolVersion;
+  buffer[1]=(snapshot.state==config_v2_sec2_lab_mutual_review::State::Reviewed)
+      ? 0x01 : 0x00;
+  std::memcpy(buffer+2,input+1,32);
+  *output=buffer;
+  *outLen=34;
+  return ESP_OK;
+}
 #endif
 
 bool Probe::startFromTrustedLocalTouch(const char *pin,
@@ -363,6 +398,9 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   if (good)
     good = protocomm_add_endpoint(
         candidate,kTxV2CommitEndpoint,txV2CommitRequest,this) == ESP_OK;
+  if (good)
+    good = protocomm_add_endpoint(
+        candidate,kTxV2ReviewEndpoint,txV2ReviewRequest,this) == ESP_OK;
 #endif
 
   if (!good) {
