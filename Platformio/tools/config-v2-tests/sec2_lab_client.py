@@ -53,6 +53,7 @@ _HINTS = {
     "device-key-proof": "The experimental device software key proof failed. Do not pin or trust this key.",
     "tx-v2-lab": "The opt-in Security2 v2 transaction proof failed. Check that the device was flashed with waveshare28v2_omote_sec2_tx_v2_lab; do not mark paired.",
     "tx-v2-touch-review": "The encrypted local-only review was not confirmed. The same-session endpoint may have expired, been rejected, or failed; no pairing was granted.",
+    "tx-v2-touch-receipt": "The LAB-only one-shot signed touch receipt was not independently verified. Do not interpret this as durable pairing, trust or approval.",
 }
 
 
@@ -134,7 +135,8 @@ def _construct_security2(Security2, sec_patch_ver: int, pin: str):
 
 async def probe(
     host: str, port: int, *, ha_proof: bool = False, device_proof: bool = False,
-    tx_v2_lab: bool = False, tx_v2_await_touch: bool = False
+    tx_v2_lab: bool = False, tx_v2_await_touch: bool = False,
+    tx_v2_attest_touch: bool = False
 ) -> None:
     Security2, Transport_HTTP = _official_provisioning_modules()
     stage = "connect"
@@ -258,6 +260,15 @@ async def probe(
                     raise ValueError("No confirmed local-only review before timeout")
                 print("PASS: matching live v2 transcript acknowledged by local touchscreen.")
                 print("LAB ONLY: no durable HA or device trust was saved.")
+                if tx_v2_attest_touch:
+                    stage = "tx-v2-touch-receipt"
+                    ciphertext = sec.encrypt_data(tx.touch_receipt_request())
+                    response = await tp.send_data(
+                        "omote-tx2-touch-receipt", ciphertext.decode("latin-1"))
+                    plaintext = sec.decrypt_data(response.encode("latin-1"))
+                    tx.check_touch_receipt_reply(plaintext)
+                    print("PASS: device P-256 signature confirms same-session physical LAB review.")
+                    print("LAB ONLY: signed touch receipt is one-shot and NOT pairing.")
             print("NOT PAIRED: no HA trust, device trust, deployment or OTA.")
 
         print("No production device/HA identity, pairing trust, or configuration writes were tested.")
@@ -282,6 +293,8 @@ def main() -> int:
                     help="Run opt-in encrypted mutual transaction v2 signature lab; never pair")
     ap.add_argument("--tx-v2-await-touch", action="store_true",
                     help="LAB ONLY: poll same encrypted v2 session for physical Review OK; never pair")
+    ap.add_argument("--tx-v2-attest-touch", action="store_true",
+                    help="LAB ONLY: verify one-shot device-signed physical Review OK receipt")
     ap.add_argument("--ack-lab-only", action="store_true",
                     help="Acknowledge this is NOT authenticated OMOTE pairing")
     ap.add_argument("--check-prereqs", action="store_true",
@@ -304,6 +317,8 @@ def main() -> int:
         ap.error("Use --ack-lab-only after verifying the local lab firmware and UI")
     if args.tx_v2_await_touch and not args.tx_v2_lab:
         ap.error("--tx-v2-await-touch also requires --tx-v2-lab")
+    if args.tx_v2_attest_touch and not args.tx_v2_await_touch:
+        ap.error("--tx-v2-attest-touch requires --tx-v2-await-touch and --tx-v2-lab")
     try:
         ipaddress.IPv4Address(args.host)
     except ipaddress.AddressValueError:
@@ -317,6 +332,7 @@ def main() -> int:
             ha_proof=args.ha_proof, device_proof=args.device_proof,
             tx_v2_lab=args.tx_v2_lab,
             tx_v2_await_touch=args.tx_v2_await_touch,
+            tx_v2_attest_touch=args.tx_v2_attest_touch,
         ))
     except LabSetupError as exc:
         print(f"FAIL [prerequisites]: {exc}", file=sys.stderr)
