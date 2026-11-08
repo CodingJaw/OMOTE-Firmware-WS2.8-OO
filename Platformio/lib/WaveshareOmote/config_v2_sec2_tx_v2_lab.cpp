@@ -199,13 +199,25 @@ bool Coordinator::commit(
   verified.valid=true;
   // Mark as consumed after successfully computing one non-authorizing proof.
   completedSession_=session;
+  completedDigest_=transcriptDigest;
   return true;
+}
+
+bool Coordinator::matchesCompleted(std::uint32_t session,
+                                    const std::uint8_t *digest32) {
+  if (!session || !digest32) return false;
+  std::lock_guard<std::mutex> lock(mutex_);
+  // The digest is public but matching it together with the authenticated
+  // callback's session ID prevents one session observing another's review.
+  return session==completedSession_ &&
+         std::memcmp(digest32,completedDigest_.data(),32)==0;
 }
 
 void Coordinator::close() {
   std::lock_guard<std::mutex> lock(mutex_);
   pending_=Pending{};
   completedSession_=0;
+  completedDigest_.fill(0);
 }
 } // namespace config_v2_sec2_tx_v2_lab
 #endif
