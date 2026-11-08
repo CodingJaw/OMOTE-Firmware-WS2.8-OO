@@ -19,6 +19,8 @@ constexpr std::size_t kMaxCommitRequestBytes = 1 + 1 + 80;
 constexpr std::uint32_t kTransactionTimeoutMs = 30000;
 constexpr std::uint32_t kLabEpoch = 1;
 constexpr std::uint8_t kProtocolVersion = 2;
+constexpr std::size_t kTouchReceiptRequestBytes = 1 + 32 + 32;
+constexpr char kTouchReceiptDomain[] = "OMOTE-SEC2-TX2-TOUCH-RECEIPT-LAB-V1\n";
 
 // Populated only after both signatures and the bound transcript are verified.
 // These are PUBLIC keys, never identity credentials or pairing authorization.
@@ -43,6 +45,14 @@ public:
   // and transcript digest as a completed mutual-signature transaction.
   bool matchesCompleted(std::uint32_t session,
                         const std::uint8_t *digest32);
+  // LAB-only, one-shot device signature, accessible only AFTER the exact
+  // session's physical Review OK was independently checked by transport.
+  // Does not authorize pairing, trust, deployment or storage.
+  bool signLocalTouchReceipt(
+      std::uint32_t session, const std::uint8_t *digest32,
+      const std::uint8_t *clientChallenge32,
+      const config_v2_sec2_lab_device_identity::Identity &identity,
+      std::vector<std::uint8_t> &reply);
   void close();
 
 private:
@@ -61,6 +71,7 @@ private:
   Pending pending_{};
   std::uint32_t completedSession_ = 0;
   std::array<std::uint8_t,32> completedDigest_{};
+  bool touchReceiptIssued_ = false;
 };
 } // namespace config_v2_sec2_tx_v2_lab
 #endif
