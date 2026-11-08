@@ -56,6 +56,34 @@ class Security2TxV2RuntimeGuardTests(unittest.TestCase):
         self.assertIn("txV2_.close();",TRANSPORT)
         self.assertEqual(WIRE["transport"]["transaction_timeout_ms"],30000)
 
+    def test_verified_v2_signatures_feed_existing_physical_touch_review(self):
+        # Verification evidence is returned only after HA signature, device
+        # signature and transcript have been computed. The transport must
+        # reuse the authenticated Security2 session ID and touch-only Review.
+        self.assertIn("struct VerifiedPublicKeys",COORD_HEAD)
+        self.assertIn("verified = VerifiedPublicKeys{}",COORD)
+        self.assertLess(COORD.index("!verifyHa(p.haPub.data()"),
+                        COORD.index("verified.valid=true;"))
+        self.assertLess(COORD.index("identity.signVerifiedLabDigest("),
+                        COORD.index("verified.valid=true;"))
+        self.assertLess(COORD.index("hash(transcript,transcriptDigest)"),
+                        COORD.index("verified.valid=true;"))
+        self.assertIn("verified.ha=p.haPub;",COORD)
+        self.assertIn("verified.device=p.devicePub;",COORD)
+        self.assertIn("config_v2_sec2_tx_v2_lab::VerifiedPublicKeys verified{}",TRANSPORT)
+        self.assertIn("!verified.valid",TRANSPORT)
+        self.assertIn("fingerprintOfVerifiedPublic(verified.ha.data())",TRANSPORT)
+        self.assertIn("fingerprintOfVerifiedPublic(verified.device.data())",TRANSPORT)
+        self.assertIn("self->labReview_.observeVerifiedHa(session,haFp,now)",TRANSPORT)
+        self.assertIn("self->labReview_.observeVerifiedDevice(session,deviceFp,now)",TRANSPORT)
+        self.assertIn("std::lock_guard<std::mutex> lock(self->reviewMutex_)",TRANSPORT)
+        self.assertIn("deviceReview!=config_v2_sec2_lab_mutual_review::Result::TouchRequired",TRANSPORT)
+        self.assertIn("std::free(buffer)",TRANSPORT)
+        # A network callback must never acknowledge or authorize trust.
+        self.assertNotIn("acknowledgeFromLocalTouch(",COORD+TRANSPORT)
+        self.assertNotIn("trustGranted = true",COORD+TRANSPORT)
+        self.assertNotIn("deploymentEnabled = true",COORD+TRANSPORT)
+
     def test_never_authorizes_trust_or_permanent_storage(self):
         for filename,text in (("coordinator",COORD),("header",COORD_HEAD)):
             for forbidden in ("Preferences storage", "nvs_set_blob(",
