@@ -232,6 +232,11 @@ async def probe(
                 raise ValueError("LAB erroneously returned authorization")
             print("PASS: both P-256 signatures bind the same live Security2 lab transaction.")
             print("PASS: device and HA derived identical verified transcript SHA-256.")
+            fingerprints = tx.verified_public_fingerprints()
+            print(f"LAB ONLY HA SHA-256 public fingerprint: {fingerprints['ha']}")
+            print(f"LAB ONLY device SHA-256 public fingerprint: {fingerprints['device']}")
+            print("Compare the HA fingerprint with the Waveshare touchscreen,")
+            print("then select Review OK or Reject on the device (LAB ONLY).")
             print(f"LAB ONLY SHA-256 transcript: {result['session_transcript_sha256']}")
             print("NOT PAIRED: no HA trust, device trust, deployment or OTA.")
 
