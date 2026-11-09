@@ -57,15 +57,19 @@ def inspect(project: Path, idf: Optional[Path]) -> Preflight:
         platform = section.get("platform", "")
         packages = section.get("platform_packages", "")
         flags = section.get("build_flags", "")
+        dependencies = section.get("lib_deps", "")
         ok = (
             PINNED_PLATFORM in platform
             and PINNED_ARDUINO in packages
             and "OMOTE_CONFIG_V2_SEC2_NONCE1_LAB=1" in flags
+            and "lovyan03/LovyanGFX@1.2.36" in dependencies
+            and "lovyan03/LovyanGFX@1.2.0" not in dependencies
             and section.get("extends") ==
                 "env:waveshare28v2_omote_sec2_tx_v2_lab"
         )
         record("isolated pinned PlatformIO target", ok,
-               "expected Tasmota 2026.10.50 / Arduino 3.3.12-1 / IDF 5.5.5")
+               "expected Tasmota 2026.10.50 / Arduino 3.3.12-1 / "
+               "IDF 5.5.5 / LovyanGFX 1.2.36")
     except (OSError, ValueError, KeyError, configparser.Error):
         record("isolated pinned PlatformIO target", False,
                "missing or invalid platformio.ini/target")
