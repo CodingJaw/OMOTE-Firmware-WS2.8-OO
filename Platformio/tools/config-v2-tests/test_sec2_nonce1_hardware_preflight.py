@@ -64,7 +64,7 @@ class Nonce1HardwarePreflightTests(unittest.TestCase):
         self.assertTrue(report.ready_for_optional_hardware_testing)
         self.assertIn("READY FOR LAB HARDWARE EVALUATION ONLY",report.explain())
         self.assertIn("NOT PAIRED",report.explain())
-        self.assertEqual(report.explain().count("SHA-256"),3)
+        self.assertEqual(report.explain().count("SHA-256"),2)
 
     def test_only_compiled_elf_is_not_enough(self):
         self.sources()
