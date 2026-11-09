@@ -1,6 +1,6 @@
 # OMOTE Waveshare Security2 patch-1 lab — experimental IDF 5.5.5 migration
 
-**Status (2026-11-09): LovyanGFX 1.2.36 fix compiled successfully and the user confirmed all read-only patch-1 preflight checks PASS. The experimental firmware has NOT yet been tested on Waveshare hardware and remains NOT PAIRED.**
+**Status (2026-11-09): user reports all requested patch-1 laboratory tests PASS, following successful IDF 5.5.5 compilation and preflight. This supports progression to negative-case hardening; no raw runtime transcript was supplied in the latest reply. NOT PAIRED; no deployment or trust enabled.**
 
 ## Confirmed build acceptance — November 9, 2026
 
@@ -262,6 +262,85 @@ The full run must pass SRP6a/AES-GCM, mutual signatures, exact transcript,
 physical Review OK and one-shot device-signed receipt. Then test
 expiry/rearm/reconnect and error paths. Passing that diagnostic still
 **does not** create a trusted HA pairing.
+
+## Phase 4 — negative-case hardening (new, OFFLINE FIRST)
+
+The user's 2026-11-09 follow-up reports the requested positive patch-1
+laboratory tests passed. No fresh terminal transcript was attached to
+that reply; treat the full details of live encryption and receipt
+verification as **user-reported** rather than independently captured
+in this revision. Existing working listener and signed-receipt wire
+framing are intentionally unchanged.
+
+Before durable HA credentials or config deployment, test all negative
+boundaries with the new firmware-owned, HACS-mirrored
+`sec2_nonce1_negative_acceptance_contract.json`.
+
+### Offline host tests (no hardware; safe to run repeatedly)
+
+```bash
+cd ~/Documents/026code/OMOTE-Firmware-WS2.8-OO/Platformio
+
+bash tools/config-v2-tests/run-host-tests.sh
+
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_sec2_nonce1_wire_model.py' -v
+
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_sec2_nonce1_negative_acceptance.py' -v
+
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_sec2_tx_v2_lab_client.py' -v
+```
+
+The new C++ `sec2_lab_review_lifecycle_test.cpp` checks exact 60-second
+touch expiry, exact 120-second listener expiry even **after** Review OK,
+physical rejection, close and rearm, and millis rollover. It is built
+and executed by the existing host test runner. The extended Python
+nonce model verifies fresh keying/IV on reconnect, stale ciphertext
+rejection across sessions, failed-tag terminal behavior, lost-response
+desynchronization, and correct new-session recovery. These tests
+simulate cryptography and state transitions; they do not prove actual
+IDF runtime concurrency or a real reconnect.
+
+### Optional physical negative checks (manual, quota-consuming when using SRP)
+
+Perform only when the working lab firmware is backed up and USB serial
+recovery is available. Do not automatically run malformed network
+traffic or repeated incorrect PIN trials: each Security2 frame is
+counted persistently. The lab can be manually rearmed on the physical
+remote, not over the network.
+
+1. **Physical reject:** start a fresh encrypted LAB window; run the
+   existing strict `--require-sec2-patch1 --tx-v2-lab
+   --tx-v2-await-touch --tx-v2-attest-touch --ack-lab-only` test.
+   After the verified fingerprints appear, press **Reject** instead of
+   Review OK. The Python client must fail during review polling and
+   must NOT print the device-signed touch-receipt PASS.
+2. **Expired listener without SRP:** start a lab window, allow it to
+   expire without entering a code, then run the read-only
+   `sec2_nonce1_remote_check.py --host 10.0.10.121 --ack-lab-only`.
+   The listener must be unavailable. This does not consume an SRP
+   attempt, but the app must continue operating.
+3. **Reopen:** physically rearm/start another lab and run the strict
+   positive test, verifying a fresh ephemeral HA fingerprint and
+   fresh session transcript. The device's existing software-key
+   fingerprint may remain the same; it is NOT a production identity
+   or trust assertion.
+
+These hardware negative checks are **not yet independently verified**
+in this phase. A successful positive lab cannot substitute for the
+reject/expiration, reconnect and downgrade tests.
+
+### Hardening gate for production
+
+The remote `proto-ver` Security2 patch advertisement is not
+authenticated. Strict client patch-1 checking prevents a *simple*
+legacy fallback, but does not establish downgrade-resistant
+production negotiation. Authenticating the actual chosen cipher suite
+and patch inside both signed parties' transcript remains a separate
+requirement. Session counters and real HTTPD callback concurrency
+also require live verification before sending durable credentials.
 
 ## Outstanding production requirements
 
