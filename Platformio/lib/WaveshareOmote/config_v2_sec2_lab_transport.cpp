@@ -14,6 +14,10 @@
 // the lab flag in production firmware.
 #if defined(OMOTE_WAVESHARE28V2) && defined(OMOTE_CONFIG_V2_PREVIEW)
 #include "config_v2_sec2_lab_transport.hpp"
+#if defined(OMOTE_CONFIG_V2_SEC2_NONCE1_LAB) && \
+    !defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
+#error "Nonce1 lab must extend the isolated signed Security2 v2 laboratory target"
+#endif
 #include <Arduino.h>  // millis(): monotonic lab-window expiry on the ESP32
 
 #include <cstdlib>
@@ -365,6 +369,13 @@ esp_err_t Probe::txV2TouchReceiptRequest(
 bool Probe::startFromTrustedLocalTouch(const char *pin,
                                       std::size_t len,
                                       std::uint32_t nowMs) {
+#if defined(OMOTE_CONFIG_V2_SEC2_NONCE1_LAB)
+  // Fail before generating a PIN verifier, provisioning a LAB device key,
+  // opening an HTTPD server, or beginning a review if the ACTUALLY LINKED
+  // Security2 object does not advertise nonce-counter patch 1.
+  if (securityPatchVersion(protocomm_security2, 0) != 1)
+    return false;
+#endif
   if (active() || activeLab_ != nullptr) return false;
   {
     std::lock_guard<std::mutex> lock(reviewMutex_);
@@ -413,8 +424,12 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
     // must use the same nonce-counter patch level (legacy 0, or patched 1).
     const int versionNumber = boundedSecurity_.ver;
     const std::uint8_t patchNumber = securityPatchVersion(boundedSecurity_, 0);
+#if defined(OMOTE_CONFIG_V2_SEC2_NONCE1_LAB)
+    const bool versionOk = versionNumber == 2 && patchNumber == 1;
+#else
     const bool versionOk = versionNumber == 2 &&
                            (patchNumber == 0 || patchNumber == 1);
+#endif
     const int n = versionOk ? std::snprintf(
         version, sizeof(version),
         "{\"prov\":{\"ver\":\"omote-sec2-lab-v1\",\"sec_patch_ver\":%u}}",
