@@ -1,6 +1,34 @@
 # OMOTE Waveshare Security2 patch-1 lab — experimental IDF 5.5.5 migration
 
-**Status (2026-11-09): new target reached a compile failure in inherited LovyanGFX 1.2.0 under ESP-IDF 5.5.5. An isolated dependency fix pins LovyanGFX 1.2.36; rebuild pending. No new-target firmware.bin/firmware.elf exists yet. Firmware has NOT been accepted on hardware. This is NOT production pairing.**
+**Status (2026-11-09): LovyanGFX 1.2.36 fix compiled successfully and the user confirmed all read-only patch-1 preflight checks PASS. The experimental firmware has NOT yet been tested on Waveshare hardware and remains NOT PAIRED.**
+
+## Confirmed build acceptance — November 9, 2026
+
+The physical user's Debian PlatformIO build completed `SUCCESS` for
+`waveshare28v2_omote_sec2_tx_v2_nonce1_lab` with Tasmota
+2026.10.50, Arduino 3.3.12-1, ESP-IDF 5.5.5, and LovyanGFX 1.2.36.
+The user ran the hardware preflight using the separate
+`$HOME/Documents/026code/esp-idf-nonce1` checkout, which returned:
+
+```text
+PASS: isolated pinned PlatformIO target
+PASS: patched Python ESP-IDF checkout: Python counter-capable; IDF source counter-capable
+PASS: new-target firmware.bin
+PASS: new-target firmware.elf
+READY FOR LAB HARDWARE EVALUATION ONLY; NOT PAIRED
+```
+
+The exact local artifacts reported were:
+
+| Artifact | Size | SHA-256 |
+| --- | ---: | --- |
+| `firmware.bin` | 2,384,432 bytes | `9d46bf81b127dc5fea2997b8dc87a1ce33434da131f8256fdaeab6462f2c2785` |
+| `firmware.elf` | 62,899,472 bytes | `ebece63cb4274f7f2c759044d5cfe2cd0eff06ef8a2d99cdc4636f639267de1d` |
+
+The build emitted linker warnings related to `statvfs` and a
+`.note.GNU-stack` section, but compiled and linked successfully.
+This does **NOT** demonstrate that the image was actually flashed,
+booted, negotiated Security2 patch 1 or passed physical review.
 
 ## Why this target exists
 
@@ -179,10 +207,43 @@ Only after a successful Stage 1 build, Stage 2 `READY FOR LAB
 HARDWARE EVALUATION ONLY` preflight, explicit USB recovery readiness,
 and review of changed runtime dependencies:
 
-1. Flash the **new** opt-in target with the exact environment name above.
+1. Before flashing, preserve the prior known-good image and ensure USB
+   serial recovery is available; an experimental firmware upload replaces
+   the working application. Do not erase NVS or program any eFuses.
+   After all prerequisites, flash the **new** opt-in target using:
+
+```bash
+~/.platformio/penv/bin/platformio run \
+  -e waveshare28v2_omote_sec2_tx_v2_nonce1_lab \
+  -t upload --upload-port /dev/ttyACM0
+```
+
+   If the new firmware fails to boot, restore the original laboratory
+   target from its existing source and PlatformIO environment:
+
+```bash
+~/.platformio/penv/bin/platformio run \
+  -e waveshare28v2_omote_sec2_tx_v2_lab \
+  -t upload --upload-port /dev/ttyACM0
+```
+
+   These commands do not request an NVS erase. Keeping a copy of the
+   previous working image is preferable to relying only on a rebuild.
 2. Confirm the Waveshare touchscreen and Settings page load normally.
-3. Press Start lab and check the listener actually advertises patch 1.
-4. On a fresh laboratory window, run:
+3. Press Start lab and run the **read-only unauthenticated** version
+   check first. It never sends a PIN or SRP frame:
+
+```bash
+export IDF_PATH="$HOME/Documents/026code/esp-idf-nonce1"
+python3 tools/config-v2-tests/sec2_nonce1_remote_check.py \
+  --host 10.0.10.121 --ack-lab-only
+```
+
+   Expected: `PASS: remote LAB version endpoint advertises Security2 patch 1.`
+   This is an **unauthenticated** version advertisement, not device
+   identity authentication or proof of a flashed image.
+4. If the version check passes and the lab window is still open, run
+   the strict, encrypted and physically approved receipt test:
 
 ```bash
 export IDF_PATH="$HOME/Documents/026code/esp-idf-nonce1"
