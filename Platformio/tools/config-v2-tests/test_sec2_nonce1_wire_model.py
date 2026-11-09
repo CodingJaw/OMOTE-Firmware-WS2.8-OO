@@ -83,6 +83,48 @@ class Nonce1WireModelTests(unittest.TestCase):
             with self.assertRaises(CounterWireError):
                 CounterChannel(KEY,b"session8"+invalid.to_bytes(4,"big"))
 
+    def test_reconnected_session_has_fresh_nonce_and_key(self):
+        # New SRP6a exchange MUST derive fresh keys and IV session prefix.
+        old=CounterChannel(KEY,NONCE)
+        old_ciphertext=old.encrypt(b"previous-session-request")
+        new_key=sha256(b"another independent mock SRP session").digest()
+        new_nonce=b"newnonce"+(1).to_bytes(4,"big")
+        self.assertNotEqual((KEY,NONCE),(new_key,new_nonce))
+        reconnect=CounterChannel(new_key,new_nonce)
+        peer=CounterChannel(new_key,new_nonce)
+        self.assertEqual(peer.decrypt(reconnect.encrypt(b"reconnected-request")),
+                         b"reconnected-request")
+        with self.assertRaises(CounterWireError):
+            peer.decrypt(old_ciphertext)
+
+    def test_cross_session_replay_fails_even_with_same_nonce_prefix(self):
+        # Fresh session key alone should reject stale ciphertext;
+        # production also requires unique nonce prefix and anti-downgrade.
+        previous=CounterChannel(KEY,NONCE)
+        old_ciphertext=previous.encrypt(b"old")
+        new_key=sha256(b"distinct reconnect SRP key").digest()
+        reconnect=CounterChannel(new_key,NONCE)
+        with self.assertRaises(CounterWireError):
+            reconnect.decrypt(old_ciphertext)
+
+    def test_session_drop_and_failed_decrypt_requires_new_transport(self):
+        a=CounterChannel(KEY,NONCE)
+        b=CounterChannel(KEY,NONCE)
+        self.assertEqual(b.decrypt(a.encrypt(b"first")),b"first")
+        # A response sent by B is lost. Its nonce counter advances.
+        lost=b.encrypt(b"lost")
+        self.assertIsInstance(lost,bytes)
+        with self.assertRaises(CounterWireError):
+            b.decrypt(a.encrypt(b"stale-request"))
+        with self.assertRaises(CounterWireError):
+            b.decrypt(a.encrypt(b"retry"))
+        fresh_key=sha256(b"independent third SRP session").digest()
+        fresh_iv=b"retrynew"+(1).to_bytes(4,"big")
+        anew=CounterChannel(fresh_key,fresh_iv)
+        bnew=CounterChannel(fresh_key,fresh_iv)
+        self.assertEqual(bnew.decrypt(anew.encrypt(b"fresh-handshake")),
+                         b"fresh-handshake")
+
     def test_malformed_inputs_fail_without_accepting_pairing(self):
         for key,nonce in ((b"short",NONCE),(KEY,b"too-short"),(KEY,b""),
                           (None,NONCE),(KEY,None)):
