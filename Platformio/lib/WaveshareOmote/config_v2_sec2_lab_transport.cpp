@@ -426,12 +426,20 @@ bool Probe::startFromTrustedLocalTouch(const char *pin,
   if (good)
     good = protocomm_add_endpoint(
         candidate, kProbeEndpoint, probeRequest, this) == ESP_OK;
+// ESP-IDF 5.3.2 protocomm_httpd_start() uses HTTPD_DEFAULT_CONFIG(), whose
+// URI handler limit is EIGHT and cannot be overridden by the supplied
+// protocomm_httpd_config_t. Security2 session and version take two slots.
+// The v2 LAB needs probe + four v2 endpoints: seven total.
+// Legacy standalone candidate/device proof endpoints are redundant in this
+// dedicated signed v2 LAB. Retain both in the ORIGINAL sec2_lab environment.
+#if !defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
   if (good)
     good = protocomm_add_endpoint(
         candidate, kCandidateProofEndpoint, candidateProofRequest, this) == ESP_OK;
   if (good)
     good = protocomm_add_endpoint(
         candidate, kDeviceProofEndpoint, deviceProofRequest, this) == ESP_OK;
+#endif
 #if defined(OMOTE_CONFIG_V2_SEC2_TX_V2_LAB)
   if (good)
     good = protocomm_add_endpoint(
