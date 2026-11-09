@@ -35,6 +35,27 @@ class Nonce1TargetIsolationTests(unittest.TestCase):
             "${env:waveshare28v2_omote_sec2_tx_v2_lab.build_flags}",
             opt["build_flags"])
 
+    def test_newer_lovyangfx_only_in_experimental_target(self):
+        # IDF 5.5 removed gpio_hal_iomux_func_sel, used by LovyanGFX 1.2.0.
+        # Upstream LovyanGFX 1.2.36 has a version-specific replacement.
+        base=self.cfg[NORMAL]["lib_deps"].splitlines()
+        candidate=self.cfg[TARGET]["lib_deps"].splitlines()
+        base=[line.strip() for line in base if line.strip()]
+        candidate=[line.strip() for line in candidate if line.strip()]
+        self.assertIn("lovyan03/LovyanGFX@1.2.0",base)
+        self.assertIn("lovyan03/LovyanGFX@1.2.36",candidate)
+        self.assertNotIn("lovyan03/LovyanGFX@1.2.0",candidate)
+        expected=[
+            line.replace("lovyan03/LovyanGFX@1.2.0",
+                         "lovyan03/LovyanGFX@1.2.36")
+            for line in base
+        ]
+        self.assertEqual(candidate,expected)
+        self.assertNotIn("lovyan03/LovyanGFX@1.2.36",base)
+        self.assertEqual(
+            self.cfg["env:waveshare28v2_omote_sec2_tx_v2_lab"]["extends"],
+            "env:waveshare28v2_omote_sec2_lab")
+
     def test_legacy_targets_and_default_do_not_enable_nonce1(self):
         for env in (NORMAL,PREVIOUS,"env:waveshare28v2_omote_sec2_lab",
                     "env:waveshare28v2"):
