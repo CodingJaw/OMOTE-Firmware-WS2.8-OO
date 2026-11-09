@@ -1,6 +1,6 @@
 # OMOTE Waveshare Security2 patch-1 lab — experimental IDF 5.5.5 migration
 
-**Status (2026-11-08): source-reviewed and committed; new target is NOT compiled or tested on the Waveshare. This is NOT production pairing.**
+**Status (2026-11-09): user reports new target compiled and offline tests passed. Firmware has NOT yet been accepted on Waveshare hardware. This is NOT production pairing.**
 
 ## Why this target exists
 
@@ -94,6 +94,10 @@ Run these only once if that destination does not already exist. These are
 ordinary Git commands, not a firmware build, and do not modify the old
 ESP-IDF checkout or install ESP-IDF submodules.
 
+If `~/Documents/026code/esp-idf-nonce1` already exists, do not clone
+over it. Instead verify `git -C ~/Documents/026code/esp-idf-nonce1
+describe --always --tags` and the sparse directories before using it.
+
 ```bash
 export IDF_PATH="$HOME/Documents/026code/esp-idf-nonce1"
 cd ~/Documents/026code/OMOTE-Firmware-WS2.8-OO/Platformio
@@ -109,10 +113,40 @@ which package was actually selected by the new build before attributing a
 counter capability to any flashed image. A counter-capable checkout alone
 is not proof of correct authentication or runtime behavior.
 
-## Stage 3 — conditional hardware test (not yet authorized by a build)
+### Hardware acceptance preflight (new)
 
-Only after a successful Stage 1 build, compatible Stage 2 client, explicit
-USB recovery readiness, and review of changed runtime dependencies:
+After the new-target build has completed, run the following **read-only**
+preflight from the `Platformio/` directory:
+
+```bash
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_sec2_nonce1_hardware_preflight.py' -v
+python3 tools/config-v2-tests/sec2_nonce1_hardware_preflight.py
+```
+
+The preflight verifies that the **new** Python `IDF_PATH` source checkout
+contains counter-capable Security2, the selected PlatformIO environment has
+the exact matched experimental toolchain pins, and the new target's
+`firmware.bin` and `firmware.elf` are present and nontrivial. It prints
+SHA-256 hashes of both artifacts for comparison/archival. It never
+connects to the remote, flashes firmware, checks a PIN, or modifies NVS.
+
+`READY FOR LAB HARDWARE EVALUATION ONLY; NOT PAIRED` means that these
+**offline** prerequisites passed, not that the binary's provenance or
+the actual physical device version has been proved. Missing old-source
+paths or missing new-target firmware artifacts correctly BLOCK the test.
+
+Before any experimental upload, keep a retrievable copy of the prior
+working `waveshare28v2_omote_sec2_tx_v2_lab` firmware image and verify
+that USB serial recovery is available on `/dev/ttyACM0`. Do NOT erase
+flash or NVS. A development build and a screenshot of the compile PASS are
+not substitutes for a recovery image.
+
+## Stage 3 — conditional hardware test (requires Stage 2 preflight PASS)
+
+Only after a successful Stage 1 build, Stage 2 `READY FOR LAB
+HARDWARE EVALUATION ONLY` preflight, explicit USB recovery readiness,
+and review of changed runtime dependencies:
 
 1. Flash the **new** opt-in target with the exact environment name above.
 2. Confirm the Waveshare touchscreen and Settings page load normally.
