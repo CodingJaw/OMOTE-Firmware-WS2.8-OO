@@ -315,6 +315,8 @@ def main() -> int:
         ap.error("--host is required unless --check-prereqs is specified")
     if not args.ack_lab_only:
         ap.error("Use --ack-lab-only after verifying the local lab firmware and UI")
+    if args.tx_v2_lab and (args.ha_proof or args.device_proof):
+        ap.error("--ha-proof and --device-proof are legacy-only; run them separately with the original sec2_lab firmware. The dedicated signed v2 lab omits these redundant endpoints to fit the ESP-IDF HTTPD handler limit.")
     if args.tx_v2_await_touch and not args.tx_v2_lab:
         ap.error("--tx-v2-await-touch also requires --tx-v2-lab")
     if args.tx_v2_attest_touch and not args.tx_v2_await_touch:
