@@ -1,6 +1,6 @@
 # OMOTE Waveshare Security2 patch-1 lab — experimental IDF 5.5.5 migration
 
-**Status (2026-11-09): user reports new target compiled and offline tests passed. Firmware has NOT yet been accepted on Waveshare hardware. This is NOT production pairing.**
+**Status (2026-11-09): new target reached a compile failure in inherited LovyanGFX 1.2.0 under ESP-IDF 5.5.5. An isolated dependency fix pins LovyanGFX 1.2.36; rebuild pending. No new-target firmware.bin/firmware.elf exists yet. Firmware has NOT been accepted on hardware. This is NOT production pairing.**
 
 ## Why this target exists
 
@@ -46,6 +46,37 @@ drivers, or LVGL code. Do not flash a new image unless the full build and
 local tests pass and the previous working firmware is available to restore.
 PlatformIO will download a new platform, Arduino framework and IDF packages;
 do not cancel the working toolchain or overwrite the existing IDF checkout.
+
+## November 9 compiler regression — LovyanGFX GPIO HAL
+
+The first attempted new-toolchain build FAILED while compiling inherited
+`LovyanGFX@1.2.0`:
+
+```text
+src/lgfx/v1/platforms/esp32s3/Bus_RGB.cpp:98:
+error: 'gpio_hal_iomux_func_sel' was not declared in this scope
+```
+
+LovyanGFX upstream fixed the ESP-IDF 5.5 GPIO API change (see
+https://github.com/lovyan03/LovyanGFX/discussions/751 and
+https://github.com/lovyan03/LovyanGFX/issues/734).
+The exact released **LovyanGFX 1.2.36** source contains an
+`ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)` compatibility branch
+which calls `gpio_hal_func_sel`. Only the opt-in
+`waveshare28v2_omote_sec2_tx_v2_nonce1_lab` has a copied dependency
+list with the single version changed to `lovyan03/LovyanGFX@1.2.36`.
+All established environments retain the original `1.2.0` dependency.
+
+The new `test_sec2_nonce1_build_isolation.py` asserts that the
+experimental dependency list equals the inherited stable list except
+for this single version. The offline hardware preflight rejects an
+experimental environment still pinned to `1.2.0`.
+
+Rebuild the **experimental** target after pulling the feature branch;
+do not modify files under `.pio/libdeps` manually, erase flash/NVS,
+or flash until the compile and preflight both pass. If the compiler
+reports another incompatibility, fix that specifically in the opt-in
+target instead of making broad stable-library updates.
 
 ## Stage 1 — offline tests and compile, NO FLASH
 
