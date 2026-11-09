@@ -263,6 +263,25 @@ class Security2LabBoundaryTests(unittest.TestCase):
                       (LIB / "config_v2_sec2_lab_peer_proof.hpp").read_text())
         self.assertTrue(all(v is False for v in spec["authorization"].values()))
 
+    def test_strict_counter_nonce_check_does_not_weaken_existing_lab(self):
+        client=(Path(__file__).with_name("sec2_lab_client.py")).read_text()
+        policy=(Path(__file__).with_name("sec2_nonce_policy.py")).read_text()
+        self.assertIn('--check-sec2-nonce',client)
+        self.assertIn('--require-sec2-patch1',client)
+        self.assertIn('audit_idf_tree(Path(root))',client)
+        self.assertIn('require_authenticated_nonce_patch(',client)
+        self.assertIn('require_counter=require_sec2_patch1',client)
+        self.assertLess(client.index('if args.check_sec2_nonce:'),
+                        client.index('if not args.host:'))
+        self.assertLess(client.index('stage = "nonce-safety"'),
+                        client.index('stage = "local-pin"'))
+        self.assertLess(client.index('stage = "local-pin"'),
+                        client.index('stage = "srp-handshake"'))
+        self.assertIn('def production_pairing_supported_by_this_lab()',policy)
+        self.assertIn('    return False',policy)
+        self.assertNotIn('os.environ["IDF_PATH"] = "',policy)
+        self.assertNotIn('nvs_set_blob(',policy)
+
     def test_manual_client_does_not_take_pin_as_cli_argument(self):
         client = (Path(__file__).with_name("sec2_lab_client.py")).read_text()
         self.assertIn("getpass(", client)
