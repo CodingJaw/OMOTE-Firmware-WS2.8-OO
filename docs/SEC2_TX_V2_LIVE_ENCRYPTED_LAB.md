@@ -66,6 +66,24 @@ verified. **Do not add the flag to today's ESP-IDF 5.3.2 lab test; it will
 correctly block it.** It cannot by itself authenticate a remote's
 capabilities or enable a trusted session.
 
+The Python `IDF_PATH` source checkout is **different from** the
+ESP-IDF package PlatformIO actually builds and links. For that reason,
+also audit the locally installed framework source, read-only:
+
+```bash
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_audit_sec2_platformio_framework.py' -v
+python3 tools/config-v2-tests/audit_sec2_platformio_framework.py
+```
+
+This inspects `~/.platformio/packages/framework-espidf*/components/protocomm/src/security/security2.c`
+when available. It shows each candidate's source path, SHA-256, and
+nonce-counter classification. A missing source or patch-0 code returns a
+nonzero status by design. The package source is **not** proof of the
+exact flashed binary; check build logs and test the isolated image on
+hardware before declaring a future upgrade secure. This script does not
+flash, connect, or consume any lab attempt quota.
+
 The firmware-owned contract
 `Platformio/tools/config-v2-tests/sec2_transport_nonce_requirements_v1.json`
 is mirrored in HACS and pinned in both repositories' tests. The
