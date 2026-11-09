@@ -287,6 +287,45 @@ implemented on **both** ESP32 and Home Assistant. The separate P-256
 signatures add transcript/proof integrity but do not make the legacy
 AES-GCM implementation acceptable for production key exchange.
 
+## Listener startup regression — fixed in feature branch, awaiting hardware
+
+On 2026-11-08 the signed-receipt LAB firmware displayed
+`Security2 lab listener failed. no trust or config changed.` immediately
+after Start lab. Review of the ESP-IDF v5.3.2 HTTPD implementation and
+the firmware registration sequence identified an endpoint-count overflow:
+`HTTPD_DEFAULT_CONFIG().max_uri_handlers = 8`, while the signed-receipt
+build had attempted **9** registrations (Security2 session + version +
+probe + two original standalone P-256 proof endpoints + four v2 endpoints).
+The last endpoint registration fails, and the listener properly closes.
+
+The isolated `waveshare28v2_omote_sec2_tx_v2_lab` now omits the two
+redundant legacy candidate/device proof endpoints, leaving **7** registered
+handlers. The original `waveshare28v2_omote_sec2_lab` retains those
+standalone test endpoints, with **5** total handlers. The version, SRP6a,
+AES-GCM, persistent message quota, local-touch gate, and four v2 endpoints
+are unchanged. PlatformIO's ESP-IDF installation does not need modification.
+
+The standalone Python client now rejects mixing `--ha-proof` or
+`--device-proof` with `--tx-v2-lab` before opening a connection. The
+new `test_sec2_lab_endpoint_budget.py` regression test checks the compile
+guards and URI limits. This patch was source-reviewed, **not yet compiled
+or validated on physical hardware**.
+
+Run from the PlatformIO directory:
+
+```bash
+python3 -m unittest discover -s tools/config-v2-tests -p 'test_sec2_lab_endpoint_budget.py' -v
+python3 -m unittest discover -s tools/config-v2-tests -p 'test_sec2_lab_boundary.py' -v
+python3 -m unittest discover -s tools/config-v2-tests -p 'test_sec2_tx_v2_runtime_guards.py' -v
+python3 -m unittest discover -s tools/config-v2-tests -p 'test_sec2_tx_v2_lab_client.py' -v
+~/.platformio/penv/bin/platformio run -e waveshare28v2_omote_sec2_tx_v2_lab
+```
+
+After they pass, upload the lab image and tap Start lab. The listener
+should open normally without clearing NVS or changing any trust. Continue
+with `--tx-v2-lab --tx-v2-await-touch --tx-v2-attest-touch --ack-lab-only`
+only after confirming the touchscreen displays the new six-digit PIN.
+
 ## Still blocking production enrollment
 
 - The software LAB device key is NOT hardware-protected and the
