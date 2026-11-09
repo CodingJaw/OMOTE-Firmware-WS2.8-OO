@@ -17,6 +17,8 @@ platform_packages =
 build_flags =
   ${env:waveshare28v2_omote_sec2_tx_v2_lab.build_flags}
   -D OMOTE_CONFIG_V2_SEC2_NONCE1_LAB=1
+lib_deps =
+  lovyan03/LovyanGFX@1.2.36
 """
 
 
@@ -82,6 +84,16 @@ class Nonce1HardwarePreflightTests(unittest.TestCase):
         report=inspect(self.project,self.idf)
         self.assertFalse(report.ready_for_optional_hardware_testing)
         self.assertIn("isolated pinned PlatformIO target",report.explain())
+
+    def test_stale_lovyangfx_version_blocks_hardware_preflight(self):
+        self.sources()
+        self.artifacts()
+        (self.project/"platformio.ini").write_text(
+            INI.replace("lovyan03/LovyanGFX@1.2.36",
+                        "lovyan03/LovyanGFX@1.2.0"))
+        report=inspect(self.project,self.idf)
+        self.assertFalse(report.ready_for_optional_hardware_testing)
+        self.assertIn("HARDWARE TEST BLOCKED",report.explain())
 
     def test_missing_idf_files_and_truncated_firmware_block(self):
         self.artifacts()
