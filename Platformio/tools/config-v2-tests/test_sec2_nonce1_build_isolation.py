@@ -41,8 +41,7 @@ class Nonce1TargetIsolationTests(unittest.TestCase):
             self.assertNotIn(
                 "OMOTE_CONFIG_V2_SEC2_NONCE1_LAB",
                 self.cfg[env].get("build_flags",""))
-        self.assertIn("2025.03.30",self.cfg[NORMAL]["extends"] if False
-                      else self.cfg["env:esp32_Rev5"]["platform"])
+        self.assertIn("2025.03.30",self.cfg["env:esp32_Rev5"]["platform"])
         self.assertNotIn("2026.10.50",self.cfg[NORMAL].get("platform",""))
         self.assertEqual(self.cfg["platformio"]["default_envs"],"x64_sim")
 
