@@ -17,6 +17,9 @@ from getpass import getpass
 from hashlib import sha256
 import ipaddress
 from inspect import signature
+from sec2_nonce_policy import (
+    NoncePolicyError, audit_idf_tree, require_authenticated_nonce_patch,
+)
 import json
 import os
 from pathlib import Path
@@ -47,6 +50,7 @@ _HINTS = {
     "validate-version": "The response does not match this exact lab protocol. Confirm the lab build and client are from the same branch.",
     "local-pin": "Enter exactly the six-digit code shown on the remote screen. The code must never be pasted into logs.",
     "srp-api": "The installed ESP-IDF Python Security2 API is incompatible with the requested patch. No SRP frame was sent and no Security2 message quota was consumed by this attempt.",
+    "nonce-safety": "Security2 patch-0 fixed nonce is not permitted by strict preflight. This decision happened before PIN entry and SRP traffic; no quota was consumed.",
     "srp-handshake": "Security2 negotiation failed. Stop here: sent SRP frames consume the persistent five-message lab quota, including across reboots.",
     "encrypted-probe": "SRP may have completed but AES-GCM probe verification failed. Do not claim pairing success.",
     "ha-key-proof": "The optional P-256 candidate-key proof failed. It is not production pairing.",
@@ -136,9 +140,24 @@ def _construct_security2(Security2, sec_patch_ver: int, pin: str):
 async def probe(
     host: str, port: int, *, ha_proof: bool = False, device_proof: bool = False,
     tx_v2_lab: bool = False, tx_v2_await_touch: bool = False,
-    tx_v2_attest_touch: bool = False
+    tx_v2_attest_touch: bool = False, require_sec2_patch1: bool = False
 ) -> None:
     Security2, Transport_HTTP = _official_provisioning_modules()
+    if require_sec2_patch1:
+        root = os.environ.get("IDF_PATH")
+        try:
+            check = audit_idf_tree(Path(root)) if root else None
+        except NoncePolicyError:
+            check = None
+        # This is an OPTIONAL strict future-transport preflight only.
+        # The normal LAB client continues to exercise legacy patch-0 with
+        # nonsecret diagnostics, NOT trusted credentials or configuration.
+        if check is None or not check.client_counter:
+            raise LabSetupError(
+                "Secure-nonce preflight rejected this Python ESP-IDF checkout. "
+                "The client has no verified Security2 counter implementation; "
+                "no device connection or SRP frame was attempted."
+            )
     stage = "connect"
     tp = None
     try:
@@ -157,6 +176,13 @@ async def probe(
             or details["sec_patch_ver"] not in (0, 1)
         ):
             raise ValueError("Unrecognized lab protocol metadata")
+
+        stage = "nonce-safety"
+        try:
+            require_authenticated_nonce_patch(
+                details, require_counter=require_sec2_patch1)
+        except NoncePolicyError:
+            raise LabProbeError("nonce-safety", "UnsupportedNoncePatch") from None
 
         stage = "local-pin"
         pin = getpass("Enter the six-digit code shown on the remote: ")
@@ -299,7 +325,31 @@ def main() -> int:
                     help="Acknowledge this is NOT authenticated OMOTE pairing")
     ap.add_argument("--check-prereqs", action="store_true",
                     help="Check ESP-IDF Python environment only; NO device connection")
+    ap.add_argument("--check-sec2-nonce", action="store_true",
+                    help="Audit local ESP-IDF Python/C source nonce mode only; no network")
+    ap.add_argument("--require-sec2-patch1", action="store_true",
+                    help="Strict nonce preflight: require a counter-capable client and remote patch 1 before SRP")
     args = ap.parse_args()
+
+    if args.check_sec2_nonce:
+        root = os.environ.get("IDF_PATH")
+        if not root:
+            print("FAIL: IDF_PATH is required for a local source nonce audit.")
+            return 2
+        try:
+            report = audit_idf_tree(Path(root))
+        except NoncePolicyError as exc:
+            print(f"FAIL: {exc}. No device contact or SRP attempt was made.")
+            return 2
+        print(f"LOCAL client AES-GCM nonce mode: {report.client_state}")
+        print(f"LOCAL ESP-IDF firmware source nonce mode: {report.firmware_state}")
+        print("NOTE: this source checkout is not proof of the version flashed on the device.")
+        print("NOT PAIRED: no network, secret, trust or configuration changes.")
+        if not report.suitable_for_further_security_review:
+            print("BLOCKED for future production pairing: legacy or unverified nonce scheme.")
+            return 2
+        print("Counter capability found; production pairing remains DISABLED pending further review.")
+        return 0
 
     if args.check_prereqs:
         try:
@@ -335,6 +385,7 @@ def main() -> int:
             tx_v2_lab=args.tx_v2_lab,
             tx_v2_await_touch=args.tx_v2_await_touch,
             tx_v2_attest_touch=args.tx_v2_attest_touch,
+            require_sec2_patch1=args.require_sec2_patch1,
         ))
     except LabSetupError as exc:
         print(f"FAIL [prerequisites]: {exc}", file=sys.stderr)
