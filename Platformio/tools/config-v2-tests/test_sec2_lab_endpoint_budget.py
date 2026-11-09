@@ -33,7 +33,7 @@ class Security2LabHttpdHandlerBudgetTests(unittest.TestCase):
         signed=after.split(V2_MARKER,1)[1].split("#endif",1)[0]
         for endpoint in ("kTxV2OpenEndpoint", "kTxV2CommitEndpoint",
                          "kTxV2ReviewEndpoint", "kTxV2ReceiptEndpoint"):
-            self.assertRegex(signed,r"candidate,\\s*"+endpoint+r",")
+            self.assertRegex(signed,r"candidate,\s*"+endpoint+r",")
         self.assertNotIn("kCandidateProofEndpoint",signed)
         self.assertNotIn("kDeviceProofEndpoint",signed)
 
