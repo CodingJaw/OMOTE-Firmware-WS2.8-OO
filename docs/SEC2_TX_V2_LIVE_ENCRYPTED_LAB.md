@@ -1,5 +1,82 @@
 # Security2 transaction v2 — opt-in live encrypted LAB
 
+## Latest hardware acceptance — 2026-11-08
+
+The user verified the live P-256 **device-signed local-touch receipt** after
+physical Review OK on Waveshare hardware. The standalone client reported:
+
+```text
+PASS: Security2 SRP6a session and AES-GCM encrypted probe.
+PASS: both P-256 signatures bind the same live Security2 lab transaction.
+PASS: device and HA derived identical verified transcript SHA-256.
+PASS: matching live v2 transcript acknowledged by local touchscreen.
+PASS: device P-256 signature confirms same-session physical LAB review.
+LAB ONLY: signed touch receipt is one-shot and NOT pairing.
+NOT PAIRED: no HA trust, device trust, deployment or OTA.
+```
+
+The confirmed transcript SHA-256 was
+`07bae75c41e01f7a7dd8ef4ec82cc7a6d12453c7df410c9a61a83392344bb6af`.
+The dedicated v2 endpoint count correction also passed this physical test.
+
+This validates a lab-only receipt, **not** a trusted HA identity, durable
+device pairing, secure remote writes, production AES-GCM confidentiality,
+or OTA. Earlier sections below describe historical development stages and
+may retain their old 'untested' qualifiers; this section is authoritative
+for the latest hardware result.
+
+## Legacy nonce security blocker — new offline gate, NOT hardware-tested
+
+Source review of official Espressif ESP-IDF **v5.3.2** shows that both
+`tools/esp_prov/security/security2.py` and
+`components/protocomm/src/security/security2.c` reuse the same
+session nonce for every AES-GCM request and response. Version **v5.4.2**
+adds a counter increment in both the Python client and firmware, and
+advertises Security2 patch version 1 in the firmware. A successful legacy
+Security2 handshake is not sufficient proof that encryption is safe for
+persistent credentials, configuration contents or trust.
+
+The new offline `sec2_nonce_policy.py` audits the local ESP-IDF source
+checkout. It deliberately fails closed when the code is unavailable or
+cannot verify counter handling on **both** sides. It is a source audit,
+NOT proof of which firmware was actually flashed. The existing nonsecret
+patch-0 LAB remains usable for diagnostics; actual pairing and deployment
+are **still disabled**.
+
+Run from the firmware `Platformio/` directory:
+
+```bash
+export IDF_PATH="$HOME/Documents/026code/esp-idf"
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_sec2_nonce_policy.py' -v
+python3 tools/config-v2-tests/sec2_lab_client.py --check-sec2-nonce
+```
+
+With the current ESP-IDF v5.3.2 tree, expect
+`legacy-or-unverified` for both sides and
+`BLOCKED for future production pairing`; the audit intentionally exits
+nonzero. It does **not** attempt SRP, change NVS, consume the lab quota,
+or flash a board.
+
+An optional strict client preflight `--require-sec2-patch1` first
+audits the Python checkout and then requires the remote's advertised
+patch 1 before prompting for a PIN or transmitting SRP frames. This
+capability will be useful when the build/runtime are upgraded and
+verified. **Do not add the flag to today's ESP-IDF 5.3.2 lab test; it will
+correctly block it.** It cannot by itself authenticate a remote's
+capabilities or enable a trusted session.
+
+The firmware-owned contract
+`Platformio/tools/config-v2-tests/sec2_transport_nonce_requirements_v1.json`
+is mirrored in HACS and pinned in both repositories' tests. The
+remaining production transport work includes choosing a compatible
+counter-safe firmware toolchain, downgrade-resistant negotiation,
+cross-direction nonce and overflow tests, reconnect/expiry tests,
+real Waveshare handshake, secure identity storage, HA-admin approval,
+and independent hardware recovery testing.
+
+
+
 Updated: 2026-11-08. **Live encrypted v2 proof PASS on Waveshare hardware; new touchscreen linkage NOT YET tested.**
 Branch: `feature/config-v2-transactional` only.
 Normal OMOTE, previously accepted `waveshare28v2_omote_sec2_lab`,
