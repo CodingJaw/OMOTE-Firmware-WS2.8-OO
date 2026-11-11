@@ -21,6 +21,8 @@ on:
       - 'Platformio/tools/config-v2-tests/test_sec2_nonce1_hardware_preflight.py'
       - 'Platformio/tools/config-v2-tests/sec2_nonce1_remote_check.py'
       - 'Platformio/tools/config-v2-tests/test_sec2_nonce1_remote_check.py'
+      - 'Platformio/tools/config-v2-tests/sec2_nonce1_upload_environment.py'
+      - 'Platformio/tools/config-v2-tests/test_sec2_nonce1_upload_environment.py'
       - 'Platformio/tools/config-v2-tests/sec2_nonce1_toolchain_candidate_contract.json'
       - 'Platformio/platformio.ini'
       - 'Platformio/tools/config-v2-tests/sec2_transport_nonce_requirements_v1.json'
@@ -94,6 +96,8 @@ jobs:
             -p 'test_sec2_nonce1_hardware_preflight.py' -v
           python3 -m unittest discover -s Platformio/tools/config-v2-tests \
             -p 'test_sec2_nonce1_remote_check.py' -v
+          python3 -m unittest discover -s Platformio/tools/config-v2-tests \
+            -p 'test_sec2_nonce1_upload_environment.py' -v
           python3 -m unittest discover -s Platformio/tools/config-v2-tests \
             -p 'test_sec2_lab_constructor_compat.py' -v
       - name: Verify firmware remains disconnected from receipt code
