@@ -1,6 +1,6 @@
 # OMOTE Waveshare Security2 patch-1 lab — experimental IDF 5.5.5 migration
 
-**Status (2026-11-09): user reports all requested patch-1 laboratory tests PASS, following successful IDF 5.5.5 compilation and preflight. This supports progression to negative-case hardening; no raw runtime transcript was supplied in the latest reply. NOT PAIRED; no deployment or trust enabled.**
+**Status (2026-11-11): experimental patch-1 firmware compiled and passed offline preflight, but the user's subsequent PlatformIO upload stopped BEFORE flashing because the Arduino framework package was not resolved. The physical device's actual patch-1 runtime status remains unverified. Previous generic test PASS reports did not include a full patch-1 live transcript. NOT PAIRED; no deployment or trust enabled.**
 
 ## November 11 upload-stage package resolution failure — NOT FLASHED
 
