@@ -131,6 +131,11 @@ public:
             return Result::Corrupt;  // never silently roll back a bad newest slot
         if (s0 == ReadResult::Present && (n0 % 2U != 0U)) return Result::Corrupt;
         if (s1 == ReadResult::Present && (n1 % 2U != 1U)) return Result::Corrupt;
+        // A single surviving slot with sequence >1 is incomplete. Sequence 1
+        // cannot distinguish an initial write from deletion of sequence 2;
+        // external anti-rollback evidence is required to detect that case.
+        if (s0 != s1 && ((s0 == ReadResult::Present ? n0 : n1) != 1U))
+            return Result::Corrupt;
         if (s0 == ReadResult::Present && s1 == ReadResult::Present) {
             uint64_t high = std::max(n0, n1), low = std::min(n0, n1);
             if (low == 0 || high - low != 1) return Result::Corrupt;
@@ -159,9 +164,12 @@ public:
                     next.ha_sha256 != current_.ha_sha256 ||
                     next.device_sha256 != current_.device_sha256)
                     return Result::Replayed;
-                const unsigned prev = static_cast<unsigned>(current_.phase);
-                const unsigned dest = static_cast<unsigned>(next.phase);
-                if (dest < prev || (prev >= 4 && dest != prev))
+                const Phase prev = current_.phase, dest = next.phase;
+                const bool allowed = dest == prev ||
+                    (prev == Phase::Prepared && (dest == Phase::CommitIntent || dest == Phase::Aborted || dest == Phase::Revoked)) ||
+                    (prev == Phase::CommitIntent && (dest == Phase::PeerConfirmed || dest == Phase::Aborted || dest == Phase::Revoked)) ||
+                    (prev == Phase::PeerConfirmed && (dest == Phase::Aborted || dest == Phase::Revoked));
+                if (!allowed)
                     return Result::Replayed;
             } else if (next.epoch != current_.epoch + 1 ||
                        (current_.phase != Phase::Aborted && current_.phase != Phase::Revoked) ||
@@ -175,10 +183,17 @@ public:
         const uint64_t nextseq = seq_ + 1;
         const unsigned slot = static_cast<unsigned>(nextseq % 2U);
         const std::string wire = encode(nextseq, next);
-        if (!store_.write(slot, wire)) return Result::WriteFailure;
-        std::string verify;
-        if (store_.read(slot, verify) != ReadResult::Present || verify != wire)
+        // A failed write or readback may still have changed durable storage.
+        // Require an explicit reload before any subsequent write.
+        if (!store_.write(slot, wire)) {
+            loaded_ = false; ready_ = false;
             return Result::WriteFailure;
+        }
+        std::string verify;
+        if (store_.read(slot, verify) != ReadResult::Present || verify != wire) {
+            loaded_ = false; ready_ = false;
+            return Result::WriteFailure;
+        }
         return load();  // fails closed on any corrupt slot after write
     }
     bool trusted() const { return false; }

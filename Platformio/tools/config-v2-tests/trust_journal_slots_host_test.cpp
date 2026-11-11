@@ -12,6 +12,7 @@ struct FakeNvs final : Backend {
     bool failwrite = false;
     bool shortwrite = false;
     bool failread = false;
+    bool fail_after_write = false;
     ReadResult read(unsigned slot, std::string& out) const override {
         if (failread) return ReadResult::Error;
         if (!present[slot]) return ReadResult::Missing;
@@ -22,7 +23,7 @@ struct FakeNvs final : Backend {
         if (failwrite) return false;
         present[slot] = true;
         values[slot] = shortwrite ? text.substr(0, text.size()/2U) : text;
-        return true;
+        return !fail_after_write;
     }
 };
 Record example(unsigned epoch=1, Phase phase=Phase::Prepared, char tx='1') {
@@ -38,12 +39,17 @@ int main() {
     assert(journal.save(example()) == Result::Ready);
     assert(nvs.present[1] && !nvs.present[0]);
     assert(journal.sequence() == 1);
+    assert(journal.save(example(1, Phase::PeerConfirmed)) == Result::Replayed);
     Journal reboot(nvs);
     assert(reboot.load() == Result::Ready);
     assert(!reboot.trusted() && !reboot.production_reconnect_enabled());
     assert(reboot.save(example(1, Phase::CommitIntent)) == Result::Ready);
     assert(nvs.present[0] && nvs.present[1]);
     assert(reboot.sequence() == 2);
+    FakeNvs missing_slot = nvs;
+    missing_slot.present[1] = false;
+    Journal missing(missing_slot);
+    assert(missing.load() == Result::Corrupt);
     assert(reboot.save(example(1, Phase::Prepared)) == Result::Replayed);
     assert(reboot.save(example(1, Phase::CommitIntent, '2')) == Result::Replayed);
     assert(reboot.save(example(0)) == Result::Invalid);
@@ -67,6 +73,7 @@ int main() {
     torn.shortwrite = true;
     assert(powercut.save(example()) == Result::WriteFailure);
     torn.shortwrite = false;
+    assert(powercut.save(example()) == Result::Invalid);
     assert(powercut.load() == Result::Corrupt); // no silent fallback
     assert(powercut.save(example(2)) == Result::Invalid);
 
@@ -79,6 +86,18 @@ int main() {
     assert(io.load() == Result::Empty);
     ioerror.failwrite = true;
     assert(io.save(example()) == Result::WriteFailure);
+    ioerror.failwrite = false;
+    assert(io.save(example()) == Result::Invalid);
+
+    FakeNvs late;
+    Journal interrupted(late);
+    assert(interrupted.load() == Result::Empty);
+    late.fail_after_write = true;
+    assert(interrupted.save(example()) == Result::WriteFailure);
+    late.fail_after_write = false;
+    assert(interrupted.save(example(1, Phase::Prepared, '2')) == Result::Invalid);
+    assert(interrupted.load() == Result::Ready);
+    assert(interrupted.record().txid == std::string(32, '1'));
 
     uint64_t seq=0;
     Record parsed;
