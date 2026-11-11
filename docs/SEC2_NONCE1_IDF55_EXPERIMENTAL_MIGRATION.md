@@ -2,6 +2,84 @@
 
 **Status (2026-11-09): user reports all requested patch-1 laboratory tests PASS, following successful IDF 5.5.5 compilation and preflight. This supports progression to negative-case hardening; no raw runtime transcript was supplied in the latest reply. NOT PAIRED; no deployment or trust enabled.**
 
+## November 11 upload-stage package resolution failure — NOT FLASHED
+
+The user attempted `-t upload` for the isolated Security2 patch-1 build.
+PlatformIO did not reach serial upload: it listed
+`framework-espidf 5.5.5`, but NOT
+`framework-arduinoespressif32`, then its Tasmota
+`builder/frameworks/arduino.py` attempted `Path(FRAMEWORK_DIR)`
+with `FRAMEWORK_DIR=None`. This is a **missing/unregistered
+Arduino framework package**, not an application compilation error.
+
+The pinned Tasmota platform 2026.10.50 declares
+`engines.platformio >=6.2.0-0`. An older Core could contribute to
+the package resolver failure, but the user's installed Core version
+was not included in the upload log. Do NOT presume the exact cause
+until checking version and registered packages.
+
+Pull the firmware feature branch and run the added **read-only** guard:
+
+```bash
+cd ~/Documents/026code/OMOTE-Firmware-WS2.8-OO/Platformio
+~/.platformio/penv/bin/platformio --version
+
+python3 -m unittest discover -s tools/config-v2-tests \
+  -p 'test_sec2_nonce1_upload_environment.py' -v
+python3 tools/config-v2-tests/sec2_nonce1_upload_environment.py
+
+~/.platformio/penv/bin/platformio pkg list \
+  -e waveshare28v2_omote_sec2_tx_v2_nonce1_lab
+```
+
+The guard requires Core 6.2+, the correct Tasmota platform,
+Arduino framework 3.3.12, and ESP-IDF framework 5.5.5. It does
+not repair packages and never contacts the device. If any item
+BLOCKS, do not attempt another upload yet.
+
+**If Core is already 6.2+ but Arduino is absent**, reinstall the
+exact framework declared in the existing experimental `platform_packages`
+without saving changes to platformio.ini:
+
+```bash
+~/.platformio/penv/bin/platformio pkg install \
+  -e waveshare28v2_omote_sec2_tx_v2_nonce1_lab \
+  --tool "framework-arduinoespressif32 @ https://github.com/tasmota/arduino-esp32/releases/download/v3.3.12-1/framework-arduinoespressif32.tar.xz" \
+  --no-save
+```
+
+Then rerun the read-only guard. If the package still does not
+register, preserve `platformio pkg list` and the first error. Do
+NOT remove `~/.platformio/packages` or `.pio` globally.
+
+**If Core is below 6.2**, preserve the existing working toolchain
+and create an **isolated** pioarduino CLI installation and cache,
+instead of upgrading the existing stable environment in place:
+
+```bash
+python3 -m venv ~/Documents/026code/pio-nonce1-venv
+~/Documents/026code/pio-nonce1-venv/bin/python -m pip install \
+  'pioarduino==6.2.0.post1'
+
+export PLATFORMIO_CORE_DIR="$HOME/.platformio-nonce1"
+~/Documents/026code/pio-nonce1-venv/bin/platformio --version
+~/Documents/026code/pio-nonce1-venv/bin/platformio pkg install \
+  -e waveshare28v2_omote_sec2_tx_v2_nonce1_lab
+```
+
+This isolated cache requires independent framework/toolchain
+downloads and a separate compile. Do not run the standard default
+guard when using an isolated cache; supply both
+`--platformio ~/Documents/026code/pio-nonce1-venv/bin/platformio`
+and `--core-dir ~/.platformio-nonce1`. The existing working
+2025.03.30 environment remains untouched.
+
+After the selected environment reports all PASS, repeat a **build
+without upload** first. Preserve a known-good firmware image and
+USB recovery before attempting another upload. In particular, do
+not use direct `esptool write_flash` to bypass the build system,
+and do not erase NVS.
+
 ## Confirmed build acceptance — November 9, 2026
 
 The physical user's Debian PlatformIO build completed `SUCCESS` for
